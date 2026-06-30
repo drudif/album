@@ -3,6 +3,12 @@ import { fileURLToPath } from 'url';
 import path from 'path';
 import { query, rows, first, withTx, initDb } from './db.js';
 import { catalog } from './catalog.js';
+import {
+  hashPassword, verifyPassword,
+  createSession, getSessionUser, destroySession,
+  COOKIE, parseCookies, setSessionCookie, clearSessionCookie,
+  turnstileSiteKey, verifyTurnstile,
+} from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -10,6 +16,7 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const PORT = process.env.PORT || 3000;
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 // Envolve handlers async para capturar erros e responder 500.
 const h = (fn) => (req, res) =>
@@ -18,262 +25,147 @@ const h = (fn) => (req, res) =>
     if (!res.headersSent) res.status(500).json({ error: 'Erro interno do servidor.' });
   });
 
-// ---------- helpers ----------
+// Cookies + usuario da sessao em cada request.
+app.use((req, res, next) => { req.cookies = parseCookies(req); next(); });
+async function loadUser(req) {
+  if (!req._userLoaded) { req.user = await getSessionUser(req.cookies[COOKIE]); req._userLoaded = true; }
+  return req.user;
+}
+const requireAuth = (req, res, next) =>
+  loadUser(req).then((u) => {
+    if (!u) return res.status(401).json({ error: 'Faça login para continuar.' });
+    next();
+  }).catch(next);
 
+const clientIp = (req) =>
+  req.headers['cf-connecting-ip'] ||
+  (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
+  req.socket.remoteAddress;
+
+// ---------- helpers ----------
 function publicUser(u) {
   if (!u) return null;
-  return { id: u.id, name: u.name, email: u.email, apartment: u.apartment };
+  const o = { id: u.id, name: u.name, email: u.email };
+  if (u.apartment) o.apartment = u.apartment;
+  return o;
 }
-
-function getUser(id) {
-  return first('SELECT * FROM users WHERE id = $1', [id]);
-}
-
-// Retorna { missing: [codes], duplicates: [codes] } de um usuario.
+function getUser(id) { return first('SELECT * FROM users WHERE id = $1', [id]); }
 async function getUserStickers(userId) {
   const list = await rows('SELECT code, status FROM user_stickers WHERE user_id = $1', [userId]);
-  const missing = [];
-  const duplicates = [];
-  for (const r of list) {
-    if (r.status === 'missing') missing.push(r.code);
-    else duplicates.push(r.code);
-  }
+  const missing = [], duplicates = [];
+  for (const r of list) (r.status === 'missing' ? missing : duplicates).push(r.code);
   return { missing, duplicates };
 }
-
 function decorate(codes) {
-  return codes
-    .map((c) => catalog.byCode.get(c))
-    .filter(Boolean)
-    .sort((a, b) => a.code.localeCompare(b.code));
+  return codes.map((c) => catalog.byCode.get(c)).filter(Boolean).sort((a, b) => a.code.localeCompare(b.code));
 }
 
-// ---------- catalogo ----------
-
-app.get('/api/catalog', (req, res) => {
-  res.json({
-    sections: catalog.sections,
-    total: catalog.stickers.length,
-  });
+// ---------- config publica (site key do Turnstile) ----------
+app.get('/api/config', (req, res) => {
+  res.json({ turnstileSiteKey: turnstileSiteKey() });
 });
 
-// ---------- cadastro / login ----------
+// ---------- catalogo ----------
+app.get('/api/catalog', (req, res) => {
+  res.json({ sections: catalog.sections, total: catalog.stickers.length });
+});
 
+// ---------- cadastro / login / sessao ----------
 app.post('/api/register', h(async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
-  const apartment = (req.body.apartment || '').trim();
+  const password = String(req.body.password || '');
+  const ageConfirmed = req.body.ageConfirmed === true;
+  const tsToken = req.body.turnstileToken || '';
 
-  if (!name || !email || !apartment) {
-    return res.status(400).json({ error: 'Preencha nome, email e apartamento.' });
-  }
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return res.status(400).json({ error: 'Email invalido.' });
-  }
-
-  const existing = await first('SELECT * FROM users WHERE email = $1', [email]);
-  if (existing) {
-    // Login amigavel: se ja existe, retorna o perfil (atualiza nome/apto).
-    await query('UPDATE users SET name = $1, apartment = $2 WHERE id = $3', [
-      name,
-      apartment,
-      existing.id,
-    ]);
-    return res.json({ user: publicUser(await getUser(existing.id)), returning: true });
+  if (!name || !email || !password) return res.status(400).json({ error: 'Preencha nome, email e senha.' });
+  if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Email inválido.' });
+  if (password.length < 8) return res.status(400).json({ error: 'A senha precisa ter ao menos 8 caracteres.' });
+  if (!ageConfirmed) return res.status(400).json({ error: 'Você precisa declarar ter 18 anos ou mais.' });
+  if (!(await verifyTurnstile(tsToken, clientIp(req)))) {
+    return res.status(400).json({ error: 'Verificação de humano falhou. Tente novamente.' });
   }
 
-  const inserted = await first(
-    'INSERT INTO users (name, email, apartment) VALUES ($1, $2, $3) RETURNING *',
-    [name, email, apartment]
+  const existing = await first('SELECT id FROM users WHERE email = $1', [email]);
+  if (existing) return res.status(409).json({ error: 'Email já cadastrado. Faça login.' });
+
+  const u = await first(
+    'INSERT INTO users (name, email, password_hash, age_confirmed) VALUES ($1, $2, $3, true) RETURNING *',
+    [name, email, hashPassword(password)]
   );
-  res.json({ user: publicUser(inserted), returning: false });
+  const { token, expires } = await createSession(u.id);
+  setSessionCookie(res, token, expires);
+  res.json({ user: publicUser(u) });
 }));
 
 app.post('/api/login', h(async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
-  const user = await first('SELECT * FROM users WHERE email = $1', [email]);
-  if (!user) {
-    return res.status(404).json({ error: 'Email nao cadastrado. Faca seu cadastro.' });
+  const password = String(req.body.password || '');
+  const tsToken = req.body.turnstileToken || '';
+
+  if (!(await verifyTurnstile(tsToken, clientIp(req)))) {
+    return res.status(400).json({ error: 'Verificação de humano falhou. Tente novamente.' });
   }
+  const user = await first('SELECT * FROM users WHERE email = $1', [email]);
+  if (!user || !verifyPassword(password, user.password_hash)) {
+    return res.status(401).json({ error: 'Email ou senha incorretos.' });
+  }
+  const { token, expires } = await createSession(user.id);
+  setSessionCookie(res, token, expires);
   res.json({ user: publicUser(user) });
 }));
 
-// ---------- usuarios / perfis ----------
-
-app.get('/api/users', h(async (req, res) => {
-  const users = await rows('SELECT * FROM users ORDER BY lower(name)');
-  const counts = await rows(
-    `SELECT user_id,
-            COUNT(*) FILTER (WHERE status = 'missing')   AS missing,
-            COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicates
-     FROM user_stickers GROUP BY user_id`
-  );
-  const cmap = new Map(counts.map((c) => [c.user_id, c]));
-  const out = users.map((u) => {
-    const c = cmap.get(u.id);
-    return {
-      ...publicUser(u),
-      missing: Number(c?.missing || 0),
-      duplicates: Number(c?.duplicates || 0),
-    };
-  });
-  res.json({ users: out });
+app.post('/api/logout', h(async (req, res) => {
+  await destroySession(req.cookies[COOKIE]);
+  clearSessionCookie(res);
+  res.json({ ok: true });
 }));
 
-app.get('/api/users/:id', h(async (req, res) => {
-  const user = await getUser(Number(req.params.id));
-  if (!user) return res.status(404).json({ error: 'Usuario nao encontrado.' });
-  const { missing, duplicates } = await getUserStickers(user.id);
-  res.json({
-    user: publicUser(user),
-    missing: decorate(missing),
-    duplicates: decorate(duplicates),
-  });
+app.get('/api/me', h(async (req, res) => {
+  const u = await loadUser(req);
+  if (!u) return res.status(401).json({ error: 'Não autenticado.' });
+  res.json({ user: publicUser(u) });
 }));
 
-// Salva a lista de figurinhas do usuario (substitui o estado atual).
-app.put('/api/users/:id/stickers', h(async (req, res) => {
-  const user = await getUser(Number(req.params.id));
-  if (!user) return res.status(404).json({ error: 'Usuario nao encontrado.' });
+// ---------- album do usuario (escopo: o proprio) ----------
+app.get('/api/users/:id', requireAuth, h(async (req, res) => {
+  const id = Number(req.params.id);
+  if (id !== req.user.id) return res.status(403).json({ error: 'Sem acesso a este álbum.' });
+  const { missing, duplicates } = await getUserStickers(id);
+  res.json({ user: publicUser(req.user), missing: decorate(missing), duplicates: decorate(duplicates) });
+}));
+
+app.put('/api/users/:id/stickers', requireAuth, h(async (req, res) => {
+  const id = Number(req.params.id);
+  if (id !== req.user.id) return res.status(403).json({ error: 'Você só pode editar o seu álbum.' });
 
   const missing = Array.isArray(req.body.missing) ? req.body.missing : [];
   const duplicates = Array.isArray(req.body.duplicates) ? req.body.duplicates : [];
-
-  // Valida e dedup contra o catalogo. Uma figurinha nao pode estar nas duas listas.
   const dupSet = new Set(duplicates.filter((c) => catalog.byCode.has(c)));
-  const missSet = new Set(
-    missing.filter((c) => catalog.byCode.has(c) && !dupSet.has(c))
-  );
+  const missSet = new Set(missing.filter((c) => catalog.byCode.has(c) && !dupSet.has(c)));
 
   const codes = [...missSet, ...dupSet];
   const statuses = [...missSet].map(() => 'missing').concat([...dupSet].map(() => 'duplicate'));
-
   await withTx(async (client) => {
-    await client.query('DELETE FROM user_stickers WHERE user_id = $1', [user.id]);
+    await client.query('DELETE FROM user_stickers WHERE user_id = $1', [id]);
     if (codes.length) {
       await client.query(
         `INSERT INTO user_stickers (user_id, code, status)
          SELECT $1, * FROM unnest($2::text[], $3::text[])`,
-        [user.id, codes, statuses]
+        [id, codes, statuses]
       );
     }
   });
-
-  res.json({
-    missing: decorate([...missSet]),
-    duplicates: decorate([...dupSet]),
-  });
+  res.json({ missing: decorate([...missSet]), duplicates: decorate([...dupSet]) });
 }));
 
-// ---------- busca por figurinha ----------
-// Quem tem repetida (oferece) e quem precisa, de um codigo ou nome de pais.
-
-app.get('/api/search', h(async (req, res) => {
-  const q = (req.query.q || '').trim().toLowerCase();
-  if (!q) return res.json({ results: [] });
-
-  // Acha os codigos que batem com a busca (codigo, label ou pais/secao).
-  const codes = catalog.stickers
-    .filter(
-      (s) =>
-        s.code.toLowerCase().includes(q) ||
-        s.label.toLowerCase().includes(q) ||
-        s.section.toLowerCase().includes(q)
-    )
-    .map((s) => s.code);
-
-  if (codes.length === 0) return res.json({ results: [] });
-
-  const list = await rows(
-    `SELECT us.code, us.status, u.id AS user_id, u.name, u.apartment, u.email
-     FROM user_stickers us
-     JOIN users u ON u.id = us.user_id
-     WHERE us.code = ANY($1)
-     ORDER BY us.code`,
-    [codes]
-  );
-
-  // Agrupa por figurinha.
-  const map = new Map();
-  for (const code of codes) {
-    const sticker = catalog.byCode.get(code);
-    map.set(code, { sticker, offers: [], needs: [] });
-  }
-  for (const r of list) {
-    const entry = map.get(r.code);
-    const person = { id: r.user_id, name: r.name, apartment: r.apartment };
-    if (r.status === 'duplicate') entry.offers.push(person);
-    else entry.needs.push(person);
-  }
-
-  // So retorna figurinhas com pelo menos alguem envolvido.
-  const results = [...map.values()].filter((e) => e.offers.length || e.needs.length);
-  res.json({ results });
-}));
-
-// ---------- cruzamentos (matches) ----------
-// Para um usuario: com quem ele pode trocar.
-//   youGive: repetidas dele que o outro precisa
-//   youGet : repetidas do outro que ele precisa
-
-app.get('/api/users/:id/matches', h(async (req, res) => {
-  const me = await getUser(Number(req.params.id));
-  if (!me) return res.status(404).json({ error: 'Usuario nao encontrado.' });
-
-  const mine = await getUserStickers(me.id);
-  const myDup = new Set(mine.duplicates);
-  const myMiss = new Set(mine.missing);
-
-  const others = await rows('SELECT * FROM users WHERE id != $1', [me.id]);
-
-  // Carrega as figurinhas de todo mundo (menos eu) de uma vez e agrupa.
-  const allStickers = await rows(
-    'SELECT user_id, code, status FROM user_stickers WHERE user_id != $1',
-    [me.id]
-  );
-  const byUser = new Map();
-  for (const r of allStickers) {
-    let e = byUser.get(r.user_id);
-    if (!e) {
-      e = { duplicates: new Set(), missing: new Set() };
-      byUser.set(r.user_id, e);
-    }
-    (r.status === 'duplicate' ? e.duplicates : e.missing).add(r.code);
-  }
-
-  const matches = [];
-  for (const other of others) {
-    const theirs = byUser.get(other.id) || { duplicates: new Set(), missing: new Set() };
-
-    // Eu dou: minhas repetidas que o outro precisa.
-    const youGive = [...myDup].filter((c) => theirs.missing.has(c));
-    // Eu recebo: repetidas do outro que eu preciso.
-    const youGet = [...theirs.duplicates].filter((c) => myMiss.has(c));
-
-    if (youGive.length || youGet.length) {
-      matches.push({
-        user: publicUser(other),
-        youGive: decorate(youGive),
-        youGet: decorate(youGet),
-        // Trocas "perfeitas" (mao dupla) sao as mais valiosas.
-        mutual: Math.min(youGive.length, youGet.length),
-        score: youGive.length + youGet.length,
-      });
-    }
-  }
-
-  // Ordena: trocas mutuas primeiro, depois volume total.
-  matches.sort((a, b) => b.mutual - a.mutual || b.score - a.score);
-  res.json({ matches });
-}));
+// NOTA: amizades por convite/aceite e grupos chegam nas Fases 2 e 3
+// (substituem o antigo cruzamento automatico entre todos os usuarios).
 
 // ---------- boot ----------
-
 initDb()
   .then(() => {
-    app.listen(PORT, () => {
-      console.log(`Álbum da Copa rodando em http://localhost:${PORT}`);
-    });
+    app.listen(PORT, () => console.log(`Álbum da Copa rodando em http://localhost:${PORT}`));
   })
   .catch((err) => {
     console.error('Falha ao inicializar o banco de dados:', err);

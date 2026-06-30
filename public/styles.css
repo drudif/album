@@ -152,6 +152,10 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .row > * { flex: 1; min-width: 180px; }
 .field label { display: block; font-size: 12px; color: var(--ink); margin-bottom: 7px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
 .field { margin-bottom: 16px; }
+.check { display: flex; align-items: flex-start; gap: 10px; font-size: 13px; font-weight: 500; margin-bottom: 16px; cursor: pointer; line-height: 1.35; }
+.check input { width: 22px; height: 22px; flex: none; accent-color: var(--ink); cursor: pointer; }
+.check b { font-weight: 700; }
+.ts-widget { margin: 2px 0 16px; }
 
 /* ---------- hero / login ---------- */
 .hero { text-align: left; padding: 30px 0 24px; max-width: 980px; }

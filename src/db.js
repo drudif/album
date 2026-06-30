@@ -52,7 +52,7 @@ export async function initDb() {
       id         SERIAL PRIMARY KEY,
       name       TEXT NOT NULL,
       email      TEXT NOT NULL UNIQUE,
-      apartment  TEXT NOT NULL,
+      apartment  TEXT,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
 
@@ -65,5 +65,19 @@ export async function initDb() {
 
     CREATE INDEX IF NOT EXISTS idx_user_stickers_code   ON user_stickers(code);
     CREATE INDEX IF NOT EXISTS idx_user_stickers_status ON user_stickers(status);
+
+    -- Sessoes (login por usuario/senha). Guarda o hash do token, nao o token.
+    CREATE TABLE IF NOT EXISTS sessions (
+      token_hash TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   `);
+
+  // Migracoes idempotentes (bancos ja existentes).
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS age_confirmed BOOLEAN NOT NULL DEFAULT false;`);
+  await pool.query(`ALTER TABLE users ALTER COLUMN apartment DROP NOT NULL;`);
 }

@@ -37,11 +37,6 @@ const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 
-function saveSession() {
-  if (state.user) localStorage.setItem('fig_user', JSON.stringify(state.user));
-  else localStorage.removeItem('fig_user');
-}
-
 // ====== Catalogo ======
 async function loadCatalog() {
   if (state.catalog) return;
@@ -71,14 +66,17 @@ async function go(view, arg) {
 }
 
 // ====== Tela de login / cadastro ======
-function renderAuth() {
+async function renderAuth() {
   $('#nav').classList.add('hidden');
+  let cfg = { turnstileSiteKey: '' };
+  try { cfg = await api('/api/config'); } catch (e) { /* segue sem */ }
+
   app.innerHTML = `
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
       <h1 class="glitch" data-text="ÁLBUM DA COPA">ÁLBUM<br/>DA COPA</h1>
-      <p>Cadastre o que falta e o que tem repetida. O app cruza tudo e mostra
-         com qual vizinho você pode trocar para completar o álbum da Copa 2026.</p>
+      <p>Monte seu álbum, convide amigos e cruze quem tem o que falta pra você.
+         Crie sua conta para começar — é de graça.</p>
       <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a></div>
       <div class="marquee" aria-hidden="true"><div>
         <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
@@ -87,8 +85,8 @@ function renderAuth() {
     </div>
     <div class="card" style="max-width:480px;">
       <div class="tabs">
-        <button id="tabReg" class="active">Cadastrar</button>
-        <button id="tabLogin">Já tenho cadastro</button>
+        <button id="tabReg" class="active">Criar conta</button>
+        <button id="tabLogin">Já tenho conta</button>
       </div>
       <form id="authForm">
         <div class="field" id="nameField">
@@ -99,10 +97,15 @@ function renderAuth() {
           <label>E-mail</label>
           <input name="email" type="email" placeholder="voce@email.com" autocomplete="email" />
         </div>
-        <div class="field" id="aptField">
-          <label>Apartamento</label>
-          <input name="apartment" placeholder="Ex.: 42, Bloco B" />
+        <div class="field">
+          <label>Senha</label>
+          <input name="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="current-password" />
         </div>
+        <label class="check" id="ageField">
+          <input name="age" type="checkbox" />
+          <span>Declaro que tenho <b>18 anos ou mais</b>.</span>
+        </label>
+        <div id="tsWidget" class="ts-widget"></div>
         <button type="submit" style="width:100%">Entrar</button>
       </form>
     </div>`;
@@ -113,31 +116,57 @@ function renderAuth() {
     $('#tabReg').classList.toggle('active', m === 'register');
     $('#tabLogin').classList.toggle('active', m === 'login');
     $('#nameField').classList.toggle('hidden', m === 'login');
-    $('#aptField').classList.toggle('hidden', m === 'login');
+    $('#ageField').classList.toggle('hidden', m === 'login');
+    const pw = document.querySelector('input[name="password"]');
+    if (pw) pw.setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
   };
   $('#tabReg').onclick = () => setMode('register');
   $('#tabLogin').onclick = () => setMode('login');
 
+  // Cloudflare Turnstile (humano/bot)
+  let tsToken = '';
+  let tsId = null;
+  const mountTurnstile = () => {
+    if (tsId !== null || !window.turnstile || !cfg.turnstileSiteKey) return;
+    tsId = window.turnstile.render('#tsWidget', {
+      sitekey: cfg.turnstileSiteKey,
+      callback: (t) => { tsToken = t; },
+      'error-callback': () => { tsToken = ''; },
+      'expired-callback': () => { tsToken = ''; },
+    });
+  };
+  (function waitTs() {
+    if (window.turnstile && window.turnstile.render) mountTurnstile();
+    else setTimeout(waitTs, 200);
+  })();
+
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
+    if (cfg.turnstileSiteKey && !tsToken) { toast('Confirme que você é humano.', true); return; }
     try {
       let data;
       if (mode === 'register') {
         data = await api('/api/register', {
           method: 'POST',
-          body: { name: f.name.value, email: f.email.value, apartment: f.apartment.value },
+          body: {
+            name: f.name.value, email: f.email.value, password: f.password.value,
+            ageConfirmed: f.age.checked, turnstileToken: tsToken,
+          },
         });
-        toast(data.returning ? 'Bem-vindo de volta!' : 'Cadastro feito! 🎉');
+        toast('Conta criada! 🎉');
       } else {
-        data = await api('/api/login', { method: 'POST', body: { email: f.email.value } });
+        data = await api('/api/login', {
+          method: 'POST',
+          body: { email: f.email.value, password: f.password.value, turnstileToken: tsToken },
+        });
         toast('Bem-vindo de volta!');
       }
       state.user = data.user;
-      saveSession();
       await boot();
     } catch (err) {
       toast(err.message, true);
+      if (tsId !== null && window.turnstile) { window.turnstile.reset(tsId); tsToken = ''; }
     }
   };
 }
@@ -670,34 +699,33 @@ function updateMatchBadge(matches) {
 // ====== Boot ======
 async function boot() {
   $('#nav').classList.remove('hidden');
-  $('#whoami').textContent = `${state.user.name} · apto ${state.user.apartment}`;
-  // Atualiza badge de trocas em segundo plano.
-  api(`/api/users/${state.user.id}/matches`).then((d) => updateMatchBadge(d.matches)).catch(() => {});
+  $('#whoami').textContent = state.user.name;
   go('profile');
 }
 
-function init() {
+async function logout() {
+  if (state.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
+  try { await api('/api/logout', { method: 'POST' }); } catch (e) { /* ok */ }
+  state.user = null;
+  state.dirty = false;
+  renderAuth();
+}
+
+async function init() {
   window._go = go; // usado por onclick inline
   document.querySelectorAll('#nav button[data-view]').forEach((b) => {
     b.onclick = () => go(b.dataset.view);
   });
-  $('#logoutBtn').onclick = () => {
-    if (state.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
-    state.user = null;
-    state.dirty = false;
-    saveSession();
-    renderAuth();
-  };
+  $('#logoutBtn').onclick = logout;
 
-  const saved = localStorage.getItem('fig_user');
-  if (saved) {
-    try {
-      state.user = JSON.parse(saved);
-      boot();
-      return;
-    } catch { /* cai pro login */ }
+  // Sessao vive no cookie httpOnly; /api/me decide se ja esta logado.
+  try {
+    const data = await api('/api/me');
+    state.user = data.user;
+    await boot();
+  } catch {
+    renderAuth();
   }
-  renderAuth();
 }
 
 init();
