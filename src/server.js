@@ -109,6 +109,23 @@ async function crossWith(meId, otherIds) {
   return out;
 }
 
+// ---------- grupos ----------
+async function isGroupMember(groupId, uid) {
+  return !!(await first('SELECT 1 FROM group_members WHERE group_id = $1 AND user_id = $2', [groupId, uid]));
+}
+async function shareGroup(a, b) {
+  return !!(await first(
+    `SELECT 1 FROM group_members m1 JOIN group_members m2 ON m1.group_id = m2.group_id
+     WHERE m1.user_id = $1 AND m2.user_id = $2 LIMIT 1`, [a, b]
+  ));
+}
+// Album visivel: o proprio, amigos, ou quem compartilha um grupo comigo.
+async function canSeeAlbum(me, target) {
+  if (me === target) return true;
+  if (await areFriends(me, target)) return true;
+  return shareGroup(me, target);
+}
+
 // ---------- config publica (site key do Turnstile) ----------
 app.get('/api/config', (req, res) => {
   res.json({ turnstileSiteKey: turnstileSiteKey() });
@@ -179,8 +196,8 @@ app.get('/api/me', h(async (req, res) => {
 // ---------- album do usuario (escopo: o proprio) ----------
 app.get('/api/users/:id', requireAuth, h(async (req, res) => {
   const id = Number(req.params.id);
-  // Visivel para o proprio dono ou para amigos (apos aceite).
-  if (id !== req.user.id && !(await areFriends(req.user.id, id))) {
+  // Visivel para o proprio dono, amigos, ou membros do mesmo grupo.
+  if (id !== req.user.id && !(await canSeeAlbum(req.user.id, id))) {
     return res.status(403).json({ error: 'Sem acesso a este álbum.' });
   }
   const target = id === req.user.id ? req.user : await getUser(id);
@@ -273,12 +290,91 @@ app.get('/api/matches', requireAuth, h(async (req, res) => {
 // Cruzamento pareado com um amigo especifico.
 app.get('/api/users/:id/matches', requireAuth, h(async (req, res) => {
   const id = Number(req.params.id);
-  if (!(await areFriends(req.user.id, id))) return res.status(403).json({ error: 'Vocês não são amigos.' });
-  const list = await crossWith(req.user.id, [id]);
-  res.json({ matches: list });
+  if (id === req.user.id) return res.status(400).json({ error: 'Cruzamento é com outra pessoa.' });
+  if (!(await canSeeAlbum(req.user.id, id))) return res.status(403).json({ error: 'Sem acesso.' });
+  res.json({ matches: await crossWith(req.user.id, [id]) });
 }));
 
-// NOTA: grupos chegam na Fase 3.
+// ---------- grupos (criar, entrar por link, cruzamento entre membros) ----------
+
+// Cria um grupo (o criador ja entra como membro).
+app.post('/api/groups', requireAuth, h(async (req, res) => {
+  const name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Dê um nome ao grupo.' });
+  if (name.length > 60) return res.status(400).json({ error: 'Nome muito longo (máx. 60).' });
+  const token = crypto.randomBytes(12).toString('base64url');
+  const g = await first(
+    'INSERT INTO groups (name, owner_id, invite_token) VALUES ($1, $2, $3) RETURNING *',
+    [name, req.user.id, token]
+  );
+  await query('INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [g.id, req.user.id]);
+  res.json({ group: { id: g.id, name: g.name } });
+}));
+
+// Meus grupos (com contagem de membros).
+app.get('/api/groups', requireAuth, h(async (req, res) => {
+  const list = await rows(
+    `SELECT g.id, g.name, g.owner_id,
+            (SELECT COUNT(*) FROM group_members m2 WHERE m2.group_id = g.id) AS members
+     FROM groups g JOIN group_members m ON m.group_id = g.id
+     WHERE m.user_id = $1 ORDER BY lower(g.name)`, [req.user.id]
+  );
+  res.json({ groups: list.map((g) => ({ id: g.id, name: g.name, owner: g.owner_id === req.user.id, members: Number(g.members) })) });
+}));
+
+const groupUrl = (req, token) => {
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  return `${proto}://${req.get('host')}/?grupo=${token}`;
+};
+
+// Detalhe do grupo: membros (com contagens), cruzamento entre mim e os demais,
+// e o link de convite. Todos os membros veem tudo.
+app.get('/api/groups/:id', requireAuth, h(async (req, res) => {
+  const gid = Number(req.params.id);
+  if (!(await isGroupMember(gid, req.user.id))) return res.status(403).json({ error: 'Você não participa deste grupo.' });
+  const g = await first('SELECT * FROM groups WHERE id = $1', [gid]);
+  if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
+
+  const memberRows = await rows(
+    `SELECT u.* FROM group_members m JOIN users u ON u.id = m.user_id
+     WHERE m.group_id = $1 ORDER BY lower(u.name)`, [gid]
+  );
+  const ids = memberRows.map((u) => u.id);
+  const counts = await rows(
+    `SELECT user_id,
+            COUNT(*) FILTER (WHERE status = 'missing')   AS missing,
+            COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicates
+     FROM user_stickers WHERE user_id = ANY($1) GROUP BY user_id`, [ids]
+  );
+  const cmap = new Map(counts.map((c) => [c.user_id, c]));
+  const members = memberRows.map((u) => {
+    const c = cmap.get(u.id);
+    return { ...publicUser(u), missing: Number(c?.missing || 0), duplicates: Number(c?.duplicates || 0), owner: u.id === g.owner_id };
+  });
+  const others = ids.filter((id) => id !== req.user.id);
+  res.json({
+    group: { id: g.id, name: g.name, owner: g.owner_id === req.user.id },
+    members,
+    matches: await crossWith(req.user.id, others),
+    link: { token: g.invite_token, url: groupUrl(req, g.invite_token) },
+  });
+}));
+
+// Consulta o convite do grupo (para confirmar antes de entrar).
+app.get('/api/groups/invite/:token', requireAuth, h(async (req, res) => {
+  const g = await first('SELECT id, name FROM groups WHERE invite_token = $1', [req.params.token]);
+  if (!g) return res.status(404).json({ error: 'Convite de grupo inválido.' });
+  res.json({ group: { id: g.id, name: g.name }, isMember: await isGroupMember(g.id, req.user.id) });
+}));
+
+// Entrar no grupo via token (aceite).
+app.post('/api/groups/join', requireAuth, h(async (req, res) => {
+  const token = (req.body.token || '').trim();
+  const g = await first('SELECT * FROM groups WHERE invite_token = $1', [token]);
+  if (!g) return res.status(404).json({ error: 'Convite de grupo inválido.' });
+  await query('INSERT INTO group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [g.id, req.user.id]);
+  res.json({ group: { id: g.id, name: g.name } });
+}));
 
 // ---------- boot ----------
 initDb()

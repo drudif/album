@@ -87,6 +87,25 @@ export async function initDb() {
     );
   `);
 
+  // Grupos: membros convidados que aceitam participar. Cruzamento e albuns
+  // visiveis entre todos os membros.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS groups (
+      id           SERIAL PRIMARY KEY,
+      name         TEXT NOT NULL,
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invite_token TEXT UNIQUE NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE TABLE IF NOT EXISTS group_members (
+      group_id  INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (group_id, user_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id);
+  `);
+
   // Migracoes idempotentes (bancos ja existentes).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS age_confirmed BOOLEAN NOT NULL DEFAULT false;`);

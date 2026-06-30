@@ -60,6 +60,8 @@ async function go(view, arg) {
   setActiveNav(view);
   if (view === 'profile') return renderProfile();
   if (view === 'friends') return renderFriends();
+  if (view === 'groups') return renderGroups();
+  if (view === 'group') return renderGroup(arg);
   if (view === 'matches') return renderMatches();
   if (view === 'person') return renderPerson(arg);
 }
@@ -517,7 +519,10 @@ async function renderFriends() {
     catch { const i = $('#inviteUrl'); i.select(); document.execCommand('copy'); }
     toast('Link copiado! 📋');
   };
-  app.querySelectorAll('.person').forEach((el) => (el.onclick = () => go('person', Number(el.dataset.id))));
+  app.querySelectorAll('.person').forEach((el) => (el.onclick = () => {
+    state.backView = ['friends'];
+    go('person', Number(el.dataset.id));
+  }));
 }
 
 function personCard(u) {
@@ -532,18 +537,107 @@ function personCard(u) {
     </div>`;
 }
 
+// ====== Grupos ======
+async function renderGroups() {
+  app.innerHTML = `<div class="empty">Carregando grupos…</div>`;
+  const { groups } = await api('/api/groups');
+  app.innerHTML = `
+    <div class="card">
+      <h2>Criar grupo</h2>
+      <div class="sub">Crie um grupo e convide quem quiser. Todos que entrarem veem os álbuns
+        uns dos outros e o app cruza as figurinhas entre <b>todos</b> os membros.</div>
+      <div class="row">
+        <input id="groupName" placeholder="Nome do grupo (ex.: Galera do trampo)" maxlength="60" />
+        <button id="createGroup" style="flex:none">Criar</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Meus grupos <span style="color:var(--muted);font-weight:400">(${groups.length})</span></h2>
+      ${groups.length === 0
+        ? `<div class="empty"><div class="big">👥</div>Você ainda não participa de nenhum grupo.<br/>Crie um acima ou entre por um link de convite.</div>`
+        : `<div class="people-grid">${groups.map(groupCard).join('')}</div>`}
+    </div>`;
+  $('#createGroup').onclick = async () => {
+    const name = $('#groupName').value.trim();
+    if (!name) { toast('Dê um nome ao grupo.', true); return; }
+    try {
+      const { group } = await api('/api/groups', { method: 'POST', body: { name } });
+      toast('Grupo criado! 👥');
+      go('group', group.id);
+    } catch (err) { toast(err.message, true); }
+  };
+  app.querySelectorAll('[data-gid]').forEach((el) => (el.onclick = () => go('group', Number(el.dataset.gid))));
+}
+
+function groupCard(g) {
+  return `
+    <div class="person" data-gid="${g.id}">
+      <div class="avatar">${esc(initials(g.name))}</div>
+      <h3>${esc(g.name)}</h3>
+      <div class="mini"><span class="g">👥 ${g.members} ${g.members === 1 ? 'membro' : 'membros'}</span>${g.owner ? '<span class="n">👑 dono</span>' : ''}</div>
+    </div>`;
+}
+
+async function renderGroup(id) {
+  app.innerHTML = `<div class="empty">Carregando grupo…</div>`;
+  const { group, members, matches, link } = await api('/api/groups/' + id);
+  app.innerHTML = `
+    <button class="backlink" id="backBtn">← Voltar para grupos</button>
+    <div class="card">
+      <h2>${esc(group.name)}</h2>
+      <div class="sub">Convide gente pro grupo. Quem entrar vê os álbuns de todos e entra no cruzamento.</div>
+      <div class="row">
+        <input id="groupUrl" readonly value="${esc(link.url)}" />
+        <button id="copyGroup" style="flex:none">Copiar link</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Membros <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
+      <div class="people-grid">${members.map(memberCard).join('')}</div>
+    </div>
+    <div class="card">
+      <h2>Trocas no grupo 🔄</h2>
+      <div class="sub">Seu cruzamento com os outros membros. As perfeitas (mão dupla) primeiro.</div>
+      <div class="legend"><span><span class="dot give"></span>Você dá</span><span><span class="dot get"></span>Você recebe</span></div>
+      ${matches.length ? matches.map(matchCard).join('') : `<div class="empty">Nenhuma troca com os membros ainda.</div>`}
+    </div>`;
+  $('#backBtn').onclick = () => go('groups');
+  $('#copyGroup').onclick = async () => {
+    try { await navigator.clipboard.writeText(link.url); }
+    catch { const i = $('#groupUrl'); i.select(); document.execCommand('copy'); }
+    toast('Link copiado! 📋');
+  };
+  const openPerson = (pid) => { state.backView = ['group', id]; go('person', pid); };
+  app.querySelectorAll('.person[data-id]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.id))));
+  app.querySelectorAll('[data-goperson]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.goperson))));
+}
+
+function memberCard(u) {
+  const me = u.id === state.user.id;
+  return `
+    <div class="person" data-id="${u.id}">
+      <div class="avatar">${esc(initials(u.name))}</div>
+      <h3>${esc(u.name)}${me ? ' (você)' : ''}${u.owner ? ' 👑' : ''}</h3>
+      <div class="mini">
+        <span class="g">🔁 ${u.duplicates} repetidas</span>
+        <span class="n">🎯 ${u.missing} faltando</span>
+      </div>
+    </div>`;
+}
+
 // ====== Perfil de outra pessoa ======
 async function renderPerson(id) {
+  if (id === state.user.id) return go('profile');
   app.innerHTML = `<div class="empty">Carregando perfil…</div>`;
   const [profile, matchData] = await Promise.all([
     api(`/api/users/${id}`),
-    api(`/api/users/${state.user.id}/matches`),
+    api(`/api/users/${id}/matches`),
   ]);
   const u = profile.user;
   const match = matchData.matches.find((m) => m.user.id === id);
 
   app.innerHTML = `
-    <button class="backlink" onclick="window._go('friends')">← Voltar para amigos</button>
+    <button class="backlink" id="backBtn">← Voltar</button>
     <div class="card">
       <div class="match-head" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
         <div class="avatar" style="width:46px;height:46px;background:var(--accent);color:#09090b;display:grid;place-items:center;">${esc(initials(u.name))}</div>
@@ -566,6 +660,8 @@ async function renderPerson(id) {
       <div class="sub">Figurinhas que ${esc(u.name.split(' ')[0])} ainda precisa.</div>
       ${chipList(profile.missing, 'get')}
     </div>`;
+
+  $('#backBtn').onclick = () => go(...(state.backView || ['friends']));
 }
 
 function matchBox(m) {
@@ -660,12 +756,30 @@ async function processInvite() {
   }
 }
 
+// ====== Convite de grupo (link ?grupo=token) ======
+async function processGroupInvite() {
+  const token = new URLSearchParams(location.search).get('grupo');
+  if (!token) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const info = await api('/api/groups/invite/' + encodeURIComponent(token));
+    if (info.isMember) { toast('Você já participa desse grupo.'); go('group', info.group.id); return; }
+    if (!confirm(`Entrar no grupo "${info.group.name}"? Todos os membros verão o álbum uns dos outros e o app vai cruzar as figurinhas entre todos.`)) return;
+    const { group } = await api('/api/groups/join', { method: 'POST', body: { token } });
+    toast('Você entrou no grupo! 👥');
+    go('group', group.id);
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
 // ====== Boot ======
 async function boot() {
   $('#nav').classList.remove('hidden');
   $('#whoami').textContent = state.user.name;
   go('profile');
   processInvite();
+  processGroupInvite();
 }
 
 async function logout() {
