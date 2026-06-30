@@ -1,0 +1,69 @@
+import pg from 'pg';
+
+const { Pool } = pg;
+
+// O Railway injeta DATABASE_URL ao referenciar o servico de Postgres.
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.warn(
+    '[db] DATABASE_URL nao definida. Configure um Postgres (no Railway, ' +
+    'referencie o servico: DATABASE_URL=${{Postgres.DATABASE_URL}}).'
+  );
+}
+
+// Conexoes internas do Railway (*.railway.internal) nao usam SSL.
+// Para conexoes externas, defina DATABASE_SSL=require (ou sslmode=require na URL).
+const useSsl =
+  /sslmode=require/.test(connectionString || '') ||
+  process.env.DATABASE_SSL === 'require' ||
+  process.env.PGSSLMODE === 'require';
+
+export const pool = new Pool({
+  connectionString,
+  ssl: useSsl ? { rejectUnauthorized: false } : false,
+  max: Number(process.env.PG_POOL_MAX || 10),
+});
+
+// Helpers
+export const query = (text, params) => pool.query(text, params);
+export const rows = async (text, params) => (await pool.query(text, params)).rows;
+export const first = async (text, params) => (await pool.query(text, params)).rows[0] || null;
+
+// Executa fn dentro de uma transacao (recebe um client dedicado).
+export async function withTx(fn) {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await fn(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Cria as tabelas se nao existirem. Chamada no boot do servidor.
+export async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      email      TEXT NOT NULL UNIQUE,
+      apartment  TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE TABLE IF NOT EXISTS user_stickers (
+      user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code     TEXT NOT NULL,
+      status   TEXT NOT NULL CHECK (status IN ('missing', 'duplicate')),
+      PRIMARY KEY (user_id, code)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_user_stickers_code   ON user_stickers(code);
+    CREATE INDEX IF NOT EXISTS idx_user_stickers_status ON user_stickers(status);
+  `);
+}

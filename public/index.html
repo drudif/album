@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Álbum da Copa · 2026</title>
+  <meta name="theme-color" content="#f8f4e8" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
+</head>
+<body>
+  <div id="cursor" class="cursor" aria-hidden="true"></div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="ball">⚽</span>
+      <div class="brand-txt">
+        <strong class="glitch" data-text="ÁLBUM DA COPA">ÁLBUM DA COPA</strong>
+        <span class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a></span>
+      </div>
+    </div>
+    <nav id="nav" class="nav hidden">
+      <button data-view="profile">Meu Álbum</button>
+      <button data-view="people">Vizinhos</button>
+      <button data-view="search">Buscar</button>
+      <button data-view="matches">Trocas <span id="matchBadge" class="badge hidden">0</span></button>
+      <span class="spacer"></span>
+      <span id="whoami" class="whoami"></span>
+      <button id="logoutBtn" class="ghost">Sair</button>
+    </nav>
+  </header>
+
+  <main id="app"></main>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+  <script>
+    // Cursor custom (circulo mix-blend-difference, smooth follow) — so em ponteiro fino.
+    (function () {
+      if (!window.matchMedia || !matchMedia('(pointer:fine)').matches) return;
+      const c = document.getElementById('cursor');
+      if (!c) return;
+      c.style.display = 'block';
+      let lx = 0, ly = 0, big = false;
+      const render = () => { c.style.transform = `translate(${lx - 16}px, ${ly - 16}px) scale(${big ? 2.5 : 1})`; };
+      // segue o mouse 1:1, sem easing/delay
+      addEventListener('mousemove', (e) => { lx = e.clientX; ly = e.clientY; render(); });
+      document.addEventListener('mouseover', (e) => {
+        big = !!(e.target.closest && e.target.closest('a, button, summary, .sticker'));
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>
