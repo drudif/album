@@ -87,6 +87,11 @@ export function turnstileSiteKey() {
   return TS_SITE;
 }
 
+// true se estamos usando as chaves de TESTE (sempre passam) — perigoso em producao.
+export function turnstileIsTest() {
+  return TS_SECRET === '1x0000000000000000000000000000000AA';
+}
+
 export async function verifyTurnstile(token, ip) {
   if (!token) return false;
   try {

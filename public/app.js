@@ -610,6 +610,11 @@ async function renderGroup(id) {
   const openPerson = (pid) => { state.backView = ['group', id]; go('person', pid); };
   app.querySelectorAll('.person[data-id]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.id))));
   app.querySelectorAll('[data-goperson]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.goperson))));
+  state.matchByUser = new Map(matches.map((m) => [m.user.id, m]));
+  state.afterTrade = () => go('group', id);
+  app.querySelectorAll('.lb-open').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); openTradeModal(Number(el.dataset.trade)); };
+  });
 }
 
 function memberCard(u) {
@@ -715,8 +720,13 @@ async function renderMatches() {
       </div>
       ${matches.map(matchCard).join('')}
     </div>`;
+  state.matchByUser = new Map(matches.map((m) => [m.user.id, m]));
+  state.afterTrade = () => go('matches');
   app.querySelectorAll('[data-goperson]').forEach((el) => {
     el.onclick = () => go('person', Number(el.dataset.goperson));
+  });
+  app.querySelectorAll('.lb-open').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); openTradeModal(Number(el.dataset.trade)); };
   });
 }
 
@@ -736,7 +746,65 @@ function matchCard(m) {
         <div class="label">Você recebe — ${m.youGet.length}</div>
         ${m.youGet.length ? `<div class="chips">${m.youGet.map((s) => chip(s, 'get')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">—</span>`}
       </div>
+      <div class="match-actions">
+        <button class="sec lb-open" type="button" data-trade="${m.user.id}">✅ Marquei a troca</button>
+      </div>
     </div>`;
+}
+
+// ====== Lightbox: registrar troca feita ======
+function tradeChk(s, kind) {
+  return `<label class="chk"><input type="checkbox" checked value="${esc(s.code)}" data-kind="${kind}" /><span><b>${esc(s.code)}</b></span></label>`;
+}
+
+async function openTradeModal(friendId) {
+  const m = state.matchByUser && state.matchByUser.get(friendId);
+  if (!m) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <div class="lb-card">
+      <h2>Marcar troca com ${esc(m.user.name.split(' ')[0])}</h2>
+      <div class="sub">Selecione o que saiu do seu álbum nesta troca. Ao confirmar, removemos esses status.</div>
+      <div class="lb-group">
+        <div class="lb-head"><span>🎯 Faltantes que você recebeu</span><button class="link" type="button" data-all="get">Selecionar todas</button></div>
+        <div class="lb-chips" data-group="get">${m.youGet.length ? m.youGet.map((s) => tradeChk(s, 'get')).join('') : '<span class="muted">nada aqui</span>'}</div>
+      </div>
+      <div class="lb-group">
+        <div class="lb-head"><span>🔁 Repetidas que você deu</span><button class="link" type="button" data-all="give">Selecionar todas</button></div>
+        <div class="lb-chips" data-group="give">${m.youGive.length ? m.youGive.map((s) => tradeChk(s, 'give')).join('') : '<span class="muted">nada aqui</span>'}</div>
+      </div>
+      <div class="lb-actions">
+        <button class="ghost" type="button" id="lbCancel">Cancelar</button>
+        <button type="button" id="lbConfirm">Confirmar troca</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  wrap.querySelector('#lbCancel').onclick = close;
+  wrap.querySelectorAll('.link[data-all]').forEach((btn) => {
+    btn.onclick = () => {
+      const boxes = [...wrap.querySelectorAll(`.lb-chips[data-group="${btn.dataset.all}"] input`)];
+      const allChecked = boxes.length && boxes.every((b) => b.checked);
+      boxes.forEach((b) => (b.checked = !allChecked));
+    };
+  });
+  wrap.querySelector('#lbConfirm').onclick = async () => {
+    const checked = (g) => [...wrap.querySelectorAll(`.lb-chips[data-group="${g}"] input:checked`)].map((b) => b.value);
+    const rmMiss = new Set(checked('get'));
+    const rmDup = new Set(checked('give'));
+    if (!rmMiss.size && !rmDup.size) { toast('Selecione ao menos uma figurinha.', true); return; }
+    try {
+      const data = await api(`/api/users/${state.user.id}`);
+      const missing = data.missing.map((s) => s.code).filter((c) => !rmMiss.has(c));
+      const duplicates = data.duplicates.map((s) => s.code).filter((c) => !rmDup.has(c));
+      await api(`/api/users/${state.user.id}/stickers`, { method: 'PUT', body: { missing, duplicates } });
+      close();
+      toast('Troca registrada! ✅');
+      if (state.afterTrade) state.afterTrade();
+    } catch (err) { toast(err.message, true); }
+  };
 }
 
 // ====== Convite de amizade (link ?convite=token) ======

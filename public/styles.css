@@ -238,7 +238,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .sticker:hover { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--ink); }
 .sticker .slot-num { display: flex; flex-direction: column; line-height: .95; min-width: 30px; }
 .sticker .slot-num i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.sticker .slot-num b { font-family: var(--display); font-size: 22px; color: var(--ink); letter-spacing: -0.04em; }
+.sticker .slot-num b { font-family: var(--font); font-weight: 400; font-size: 21px; color: var(--ink); letter-spacing: -0.01em; }
 .sticker .slot-ph {
   position: relative; height: 42px; background: var(--bg);
   border: 2px solid var(--ink); border-radius: 6px;
@@ -307,6 +307,24 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .match .block { margin-top: 14px; }
 .match .block .label { font-size: 11px; font-weight: 700; margin-bottom: 8px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
 .match .block.give .label, .match .block.get .label { color: var(--ink); }
+
+.match-actions { margin-top: 16px; display: flex; justify-content: flex-end; }
+
+/* ---------- lightbox (registrar troca) ---------- */
+.lightbox { position: fixed; inset: 0; z-index: 200; background: rgba(9,9,11,.55); display: grid; place-items: center; padding: 20px; }
+.lb-card { background: var(--panel); border: 2px solid var(--ink); border-radius: 14px; box-shadow: var(--shadow-lg); padding: 24px; width: min(560px, 100%); max-height: 86vh; overflow: auto; }
+.lb-card h2 { margin: 0 0 6px; font-size: 24px; text-transform: uppercase; }
+.lb-card .sub { color: var(--muted); font-size: 14px; margin-bottom: 6px; }
+.lb-group { margin-top: 18px; }
+.lb-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: .04em; }
+.lb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chk { display: inline-flex; align-items: center; gap: 7px; border: 2px solid var(--ink); border-radius: 6px; padding: 5px 9px; font-size: 12px; cursor: pointer; box-shadow: 1px 1px 0 0 var(--ink); user-select: none; }
+.chk input { width: 16px; height: 16px; accent-color: var(--ink); cursor: pointer; }
+.chk:has(input:checked) { background: var(--acid); }
+.link { background: none; border: none; box-shadow: none; color: var(--ink); text-transform: uppercase; font-size: 11px; letter-spacing: .04em; text-decoration: underline; padding: 2px 4px; border-radius: 4px; }
+.link:hover { background: var(--acid); transform: none; box-shadow: none; }
+.lb-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.lb-card .muted { color: var(--muted); font-size: 13px; }
 
 .empty { text-align: center; color: var(--muted); padding: 54px 14px; }
 .empty .big { font-size: 48px; margin-bottom: 10px; }

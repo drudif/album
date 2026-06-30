@@ -8,12 +8,13 @@ import {
   hashPassword, verifyPassword,
   createSession, getSessionUser, destroySession,
   COOKIE, parseCookies, setSessionCookie, clearSessionCookie,
-  turnstileSiteKey, verifyTurnstile,
+  turnstileSiteKey, turnstileIsTest, verifyTurnstile,
 } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json());
+app.set('trust proxy', true); // atras do proxy do Railway (x-forwarded-*)
+app.use(express.json({ limit: '256kb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const PORT = process.env.PORT || 3000;
@@ -42,6 +43,19 @@ const clientIp = (req) =>
   req.headers['cf-connecting-ip'] ||
   (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
   req.socket.remoteAddress;
+
+// Rate limit simples em memoria (defesa extra contra brute force/spam).
+const _rl = new Map();
+const rateLimit = (max, windowMs) => (req, res, next) => {
+  const ip = clientIp(req) || 'unknown';
+  const now = Date.now();
+  let e = _rl.get(ip);
+  if (!e || e.reset < now) { e = { count: 0, reset: now + windowMs }; _rl.set(ip, e); }
+  e.count++;
+  if (e.count > max) return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos.' });
+  next();
+};
+const authLimit = rateLimit(20, 10 * 60 * 1000); // 20 tentativas / 10 min por IP
 
 // ---------- helpers ----------
 function publicUser(u) {
@@ -137,7 +151,7 @@ app.get('/api/catalog', (req, res) => {
 });
 
 // ---------- cadastro / login / sessao ----------
-app.post('/api/register', h(async (req, res) => {
+app.post('/api/register', authLimit, h(async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
@@ -164,7 +178,7 @@ app.post('/api/register', h(async (req, res) => {
   res.json({ user: publicUser(u) });
 }));
 
-app.post('/api/login', h(async (req, res) => {
+app.post('/api/login', authLimit, h(async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   const tsToken = req.body.turnstileToken || '';
@@ -379,6 +393,10 @@ app.post('/api/groups/join', requireAuth, h(async (req, res) => {
 // ---------- boot ----------
 initDb()
   .then(() => {
+    if (process.env.NODE_ENV === 'production' && turnstileIsTest()) {
+      console.warn('⚠️  ATENÇÃO: Turnstile usando CHAVES DE TESTE em produção (sempre passam). ' +
+        'Defina TURNSTILE_SITE_KEY e TURNSTILE_SECRET_KEY reais — sem isso a verificação humano/bot está desligada.');
+    }
     app.listen(PORT, () => console.log(`Álbum da Copa rodando em http://localhost:${PORT}`));
   })
   .catch((err) => {
