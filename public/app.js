@@ -37,11 +37,6 @@ const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 
-function saveSession() {
-  if (state.user) localStorage.setItem('fig_user', JSON.stringify(state.user));
-  else localStorage.removeItem('fig_user');
-}
-
 // ====== Catalogo ======
 async function loadCatalog() {
   if (state.catalog) return;
@@ -64,21 +59,25 @@ async function go(view, arg) {
   }
   setActiveNav(view);
   if (view === 'profile') return renderProfile();
-  if (view === 'people') return renderPeople();
-  if (view === 'search') return renderSearch();
+  if (view === 'friends') return renderFriends();
+  if (view === 'groups') return renderGroups();
+  if (view === 'group') return renderGroup(arg);
   if (view === 'matches') return renderMatches();
   if (view === 'person') return renderPerson(arg);
 }
 
 // ====== Tela de login / cadastro ======
-function renderAuth() {
+async function renderAuth() {
   $('#nav').classList.add('hidden');
+  let cfg = { turnstileSiteKey: '' };
+  try { cfg = await api('/api/config'); } catch (e) { /* segue sem */ }
+
   app.innerHTML = `
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
       <h1 class="glitch" data-text="ÁLBUM DA COPA">ÁLBUM<br/>DA COPA</h1>
-      <p>Cadastre o que falta e o que tem repetida. O app cruza tudo e mostra
-         com qual vizinho você pode trocar para completar o álbum da Copa 2026.</p>
+      <p>Monte seu álbum, convide amigos e cruze quem tem o que falta pra você.
+         Crie sua conta para começar — é de graça.</p>
       <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a></div>
       <div class="marquee" aria-hidden="true"><div>
         <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
@@ -87,8 +86,8 @@ function renderAuth() {
     </div>
     <div class="card" style="max-width:480px;">
       <div class="tabs">
-        <button id="tabReg" class="active">Cadastrar</button>
-        <button id="tabLogin">Já tenho cadastro</button>
+        <button id="tabReg" class="active">Criar conta</button>
+        <button id="tabLogin">Já tenho conta</button>
       </div>
       <form id="authForm">
         <div class="field" id="nameField">
@@ -99,10 +98,15 @@ function renderAuth() {
           <label>E-mail</label>
           <input name="email" type="email" placeholder="voce@email.com" autocomplete="email" />
         </div>
-        <div class="field" id="aptField">
-          <label>Apartamento</label>
-          <input name="apartment" placeholder="Ex.: 42, Bloco B" />
+        <div class="field">
+          <label>Senha</label>
+          <input name="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="current-password" />
         </div>
+        <label class="check" id="ageField">
+          <input name="age" type="checkbox" />
+          <span>Declaro que tenho <b>18 anos ou mais</b>.</span>
+        </label>
+        <div id="tsWidget" class="ts-widget"></div>
         <button type="submit" style="width:100%">Entrar</button>
       </form>
     </div>`;
@@ -113,31 +117,57 @@ function renderAuth() {
     $('#tabReg').classList.toggle('active', m === 'register');
     $('#tabLogin').classList.toggle('active', m === 'login');
     $('#nameField').classList.toggle('hidden', m === 'login');
-    $('#aptField').classList.toggle('hidden', m === 'login');
+    $('#ageField').classList.toggle('hidden', m === 'login');
+    const pw = document.querySelector('input[name="password"]');
+    if (pw) pw.setAttribute('autocomplete', m === 'register' ? 'new-password' : 'current-password');
   };
   $('#tabReg').onclick = () => setMode('register');
   $('#tabLogin').onclick = () => setMode('login');
 
+  // Cloudflare Turnstile (humano/bot)
+  let tsToken = '';
+  let tsId = null;
+  const mountTurnstile = () => {
+    if (tsId !== null || !window.turnstile || !cfg.turnstileSiteKey) return;
+    tsId = window.turnstile.render('#tsWidget', {
+      sitekey: cfg.turnstileSiteKey,
+      callback: (t) => { tsToken = t; },
+      'error-callback': () => { tsToken = ''; },
+      'expired-callback': () => { tsToken = ''; },
+    });
+  };
+  (function waitTs() {
+    if (window.turnstile && window.turnstile.render) mountTurnstile();
+    else setTimeout(waitTs, 200);
+  })();
+
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
+    if (cfg.turnstileSiteKey && !tsToken) { toast('Confirme que você é humano.', true); return; }
     try {
       let data;
       if (mode === 'register') {
         data = await api('/api/register', {
           method: 'POST',
-          body: { name: f.name.value, email: f.email.value, apartment: f.apartment.value },
+          body: {
+            name: f.name.value, email: f.email.value, password: f.password.value,
+            ageConfirmed: f.age.checked, turnstileToken: tsToken,
+          },
         });
-        toast(data.returning ? 'Bem-vindo de volta!' : 'Cadastro feito! 🎉');
+        toast('Conta criada! 🎉');
       } else {
-        data = await api('/api/login', { method: 'POST', body: { email: f.email.value } });
+        data = await api('/api/login', {
+          method: 'POST',
+          body: { email: f.email.value, password: f.password.value, turnstileToken: tsToken },
+        });
         toast('Bem-vindo de volta!');
       }
       state.user = data.user;
-      saveSession();
       await boot();
     } catch (err) {
       toast(err.message, true);
+      if (tsId !== null && window.turnstile) { window.turnstile.reset(tsId); tsToken = ''; }
     }
   };
 }
@@ -460,20 +490,39 @@ async function exportCard() {
   }, 'image/png');
 }
 
-// ====== Vizinhos ======
-async function renderPeople() {
-  app.innerHTML = `<div class="empty">Carregando vizinhos…</div>`;
-  const { users } = await api('/api/users');
-  const others = users.filter((u) => u.id !== state.user.id);
+// ====== Amigos (convite por link + aceite) ======
+async function renderFriends() {
+  app.innerHTML = `<div class="empty">Carregando amigos…</div>`;
+  const [link, data] = await Promise.all([
+    api('/api/friends/link').catch(() => ({ url: '' })),
+    api('/api/friends'),
+  ]);
+  const friends = data.friends;
   app.innerHTML = `
     <div class="card">
-      <h2>Vizinhos no álbum</h2>
-      <div class="sub">${others.length} ${others.length === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} além de você. Clique para ver o perfil.</div>
-      ${others.length === 0
-        ? `<div class="empty"><div class="big">🏢</div>Ainda é só você por aqui.<br/>Chame os vizinhos para se cadastrarem!</div>`
-        : `<div class="people-grid">${others.map(personCard).join('')}</div>`}
+      <h2>Convidar amigo</h2>
+      <div class="sub">Mande seu link. Quando a pessoa <b>aceitar</b>, os álbuns de vocês
+        ficam visíveis e o app cruza o que falta com o que sobra.</div>
+      <div class="row">
+        <input id="inviteUrl" readonly value="${esc(link.url)}" />
+        <button id="copyInvite" style="flex:none">Copiar link</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Meus amigos <span style="color:var(--muted);font-weight:400">(${friends.length})</span></h2>
+      ${friends.length === 0
+        ? `<div class="empty"><div class="big">🤝</div>Você ainda não tem amigos por aqui.<br/>Compartilhe seu link de convite!</div>`
+        : `<div class="people-grid">${friends.map(personCard).join('')}</div>`}
     </div>`;
-  app.querySelectorAll('.person').forEach((el) => (el.onclick = () => go('person', Number(el.dataset.id))));
+  $('#copyInvite').onclick = async () => {
+    try { await navigator.clipboard.writeText(link.url); }
+    catch { const i = $('#inviteUrl'); i.select(); document.execCommand('copy'); }
+    toast('Link copiado! 📋');
+  };
+  app.querySelectorAll('.person').forEach((el) => (el.onclick = () => {
+    state.backView = ['friends'];
+    go('person', Number(el.dataset.id));
+  }));
 }
 
 function personCard(u) {
@@ -481,7 +530,99 @@ function personCard(u) {
     <div class="person" data-id="${u.id}">
       <div class="avatar">${esc(initials(u.name))}</div>
       <h3>${esc(u.name)}</h3>
-      <div class="apt">🏠 Apto ${esc(u.apartment)}</div>
+      <div class="mini">
+        <span class="g">🔁 ${u.duplicates} repetidas</span>
+        <span class="n">🎯 ${u.missing} faltando</span>
+      </div>
+    </div>`;
+}
+
+// ====== Grupos ======
+async function renderGroups() {
+  app.innerHTML = `<div class="empty">Carregando grupos…</div>`;
+  const { groups } = await api('/api/groups');
+  app.innerHTML = `
+    <div class="card">
+      <h2>Criar grupo</h2>
+      <div class="sub">Crie um grupo e convide quem quiser. Todos que entrarem veem os álbuns
+        uns dos outros e o app cruza as figurinhas entre <b>todos</b> os membros.</div>
+      <div class="row">
+        <input id="groupName" placeholder="Nome do grupo (ex.: Galera do trampo)" maxlength="60" />
+        <button id="createGroup" style="flex:none">Criar</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Meus grupos <span style="color:var(--muted);font-weight:400">(${groups.length})</span></h2>
+      ${groups.length === 0
+        ? `<div class="empty"><div class="big">👥</div>Você ainda não participa de nenhum grupo.<br/>Crie um acima ou entre por um link de convite.</div>`
+        : `<div class="people-grid">${groups.map(groupCard).join('')}</div>`}
+    </div>`;
+  $('#createGroup').onclick = async () => {
+    const name = $('#groupName').value.trim();
+    if (!name) { toast('Dê um nome ao grupo.', true); return; }
+    try {
+      const { group } = await api('/api/groups', { method: 'POST', body: { name } });
+      toast('Grupo criado! 👥');
+      go('group', group.id);
+    } catch (err) { toast(err.message, true); }
+  };
+  app.querySelectorAll('[data-gid]').forEach((el) => (el.onclick = () => go('group', Number(el.dataset.gid))));
+}
+
+function groupCard(g) {
+  return `
+    <div class="person" data-gid="${g.id}">
+      <div class="avatar">${esc(initials(g.name))}</div>
+      <h3>${esc(g.name)}</h3>
+      <div class="mini"><span class="g">👥 ${g.members} ${g.members === 1 ? 'membro' : 'membros'}</span>${g.owner ? '<span class="n">👑 dono</span>' : ''}</div>
+    </div>`;
+}
+
+async function renderGroup(id) {
+  app.innerHTML = `<div class="empty">Carregando grupo…</div>`;
+  const { group, members, matches, link } = await api('/api/groups/' + id);
+  app.innerHTML = `
+    <button class="backlink" id="backBtn">← Voltar para grupos</button>
+    <div class="card">
+      <h2>${esc(group.name)}</h2>
+      <div class="sub">Convide gente pro grupo. Quem entrar vê os álbuns de todos e entra no cruzamento.</div>
+      <div class="row">
+        <input id="groupUrl" readonly value="${esc(link.url)}" />
+        <button id="copyGroup" style="flex:none">Copiar link</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Membros <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
+      <div class="people-grid">${members.map(memberCard).join('')}</div>
+    </div>
+    <div class="card">
+      <h2>Trocas no grupo 🔄</h2>
+      <div class="sub">Seu cruzamento com os outros membros. As perfeitas (mão dupla) primeiro.</div>
+      <div class="legend"><span><span class="dot give"></span>Você dá</span><span><span class="dot get"></span>Você recebe</span></div>
+      ${matches.length ? matches.map(matchCard).join('') : `<div class="empty">Nenhuma troca com os membros ainda.</div>`}
+    </div>`;
+  $('#backBtn').onclick = () => go('groups');
+  $('#copyGroup').onclick = async () => {
+    try { await navigator.clipboard.writeText(link.url); }
+    catch { const i = $('#groupUrl'); i.select(); document.execCommand('copy'); }
+    toast('Link copiado! 📋');
+  };
+  const openPerson = (pid) => { state.backView = ['group', id]; go('person', pid); };
+  app.querySelectorAll('.person[data-id]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.id))));
+  app.querySelectorAll('[data-goperson]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.goperson))));
+  state.matchByUser = new Map(matches.map((m) => [m.user.id, m]));
+  state.afterTrade = () => go('group', id);
+  app.querySelectorAll('.lb-open').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); openTradeModal(Number(el.dataset.trade)); };
+  });
+}
+
+function memberCard(u) {
+  const me = u.id === state.user.id;
+  return `
+    <div class="person" data-id="${u.id}">
+      <div class="avatar">${esc(initials(u.name))}</div>
+      <h3>${esc(u.name)}${me ? ' (você)' : ''}${u.owner ? ' 👑' : ''}</h3>
       <div class="mini">
         <span class="g">🔁 ${u.duplicates} repetidas</span>
         <span class="n">🎯 ${u.missing} faltando</span>
@@ -491,22 +632,23 @@ function personCard(u) {
 
 // ====== Perfil de outra pessoa ======
 async function renderPerson(id) {
+  if (id === state.user.id) return go('profile');
   app.innerHTML = `<div class="empty">Carregando perfil…</div>`;
   const [profile, matchData] = await Promise.all([
     api(`/api/users/${id}`),
-    api(`/api/users/${state.user.id}/matches`),
+    api(`/api/users/${id}/matches`),
   ]);
   const u = profile.user;
   const match = matchData.matches.find((m) => m.user.id === id);
 
   app.innerHTML = `
-    <button class="backlink" onclick="window._go('people')">← Voltar para vizinhos</button>
+    <button class="backlink" id="backBtn">← Voltar</button>
     <div class="card">
       <div class="match-head" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-        <div class="avatar" style="width:46px;height:46px;border-radius:50%;background:var(--accent);color:#04150f;font-weight:800;display:grid;place-items:center;">${esc(initials(u.name))}</div>
+        <div class="avatar" style="width:46px;height:46px;background:var(--accent);color:#09090b;display:grid;place-items:center;">${esc(initials(u.name))}</div>
         <div>
           <h2 style="margin:0">${esc(u.name)}</h2>
-          <div class="apt" style="color:var(--muted);font-size:13px">🏠 Apto ${esc(u.apartment)} · ${esc(u.email)}</div>
+          <div class="apt" style="color:var(--muted);font-size:13px">${esc(u.email || '')}</div>
         </div>
       </div>
       ${match ? matchBox(match) : `<div class="sub" style="margin-top:12px">Vocês não têm trocas em comum no momento.</div>`}
@@ -523,6 +665,8 @@ async function renderPerson(id) {
       <div class="sub">Figurinhas que ${esc(u.name.split(' ')[0])} ainda precisa.</div>
       ${chipList(profile.missing, 'get')}
     </div>`;
+
+  $('#backBtn').onclick = () => go(...(state.backView || ['friends']));
 }
 
 function matchBox(m) {
@@ -548,66 +692,10 @@ function chipList(arr, kind, highlightAgainst) {
   return `<div class="chips">${arr.map((s) => chip(s, kind)).join('')}</div>`;
 }
 
-// ====== Busca por figurinha ======
-function renderSearch() {
-  app.innerHTML = `
-    <div class="card">
-      <h2>Buscar figurinha</h2>
-      <div class="sub">Digite um código (ex.: <b>BRA07</b>), país (ex.: <b>Argentina</b>) ou trecho.
-        Veja quem tem repetida pra oferecer e quem precisa.</div>
-      <input id="searchInput" placeholder="🔎 Buscar figurinha por código ou país…" autofocus />
-      <div id="searchResults" style="margin-top:16px"></div>
-    </div>`;
-  const inp = $('#searchInput');
-  let t;
-  inp.oninput = () => {
-    clearTimeout(t);
-    t = setTimeout(() => doSearch(inp.value.trim()), 250);
-  };
-}
-
-async function doSearch(q) {
-  const box = $('#searchResults');
-  if (!q) { box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="empty">Buscando…</div>`;
-  const { results } = await api(`/api/search?q=${encodeURIComponent(q)}`);
-  if (!results.length) {
-    box.innerHTML = `<div class="empty"><div class="big">🔍</div>Ninguém cadastrou essa figurinha ainda.</div>`;
-    return;
-  }
-  box.innerHTML = results.slice(0, 60).map(searchRow).join('');
-  box.querySelectorAll('[data-goperson]').forEach((el) => {
-    el.onclick = () => go('person', Number(el.dataset.goperson));
-  });
-}
-
-function searchRow(r) {
-  const me = state.user.id;
-  const ppl = (arr, kind) =>
-    arr.length
-      ? arr.map((p) =>
-          `<span class="chip ${kind}" data-goperson="${p.id}" style="cursor:pointer">${p.id === me ? 'Você' : esc(p.name)} · apto ${esc(p.apartment)}</span>`
-        ).join('')
-      : `<span style="color:var(--muted);font-size:13px">ninguém</span>`;
-  return `
-    <div class="match" style="margin-bottom:10px">
-      <div class="head"><h3>${r.sticker.code}</h3></div>
-      <div class="block give">
-        <div class="label" style="color:var(--give)">🔁 Tem repetida para oferecer (${r.offers.length})</div>
-        <div class="chips">${ppl(r.offers, 'give')}</div>
-      </div>
-      <div class="block get">
-        <div class="label" style="color:var(--get)">🎯 Está precisando (${r.needs.length})</div>
-        <div class="chips">${ppl(r.needs, 'get')}</div>
-      </div>
-    </div>`;
-}
-
-// ====== Trocas / cruzamentos ======
+// ====== Trocas / cruzamentos (entre amigos) ======
 async function renderMatches() {
   app.innerHTML = `<div class="empty">Procurando trocas…</div>`;
-  const { matches } = await api(`/api/users/${state.user.id}/matches`);
-  updateMatchBadge(matches);
+  const { matches } = await api('/api/matches');
 
   if (!matches.length) {
     app.innerHTML = `
@@ -615,8 +703,8 @@ async function renderMatches() {
         <h2>Suas trocas</h2>
         <div class="empty"><div class="big">🤷</div>
           Nenhuma troca encontrada ainda.<br/>
-          Cadastre suas figurinhas que faltam e repetidas em <b>Meu Álbum</b>,
-          e peça pros vizinhos fazerem o mesmo!</div>
+          Marque o que falta e o que tem repetida em <b>Meu Álbum</b>,
+          e convide amigos em <b>Amigos</b>.</div>
       </div>`;
     return;
   }
@@ -624,7 +712,7 @@ async function renderMatches() {
   app.innerHTML = `
     <div class="card">
       <h2>Suas trocas 🔄</h2>
-      <div class="sub">${matches.length} ${matches.length === 1 ? 'vizinho combina' : 'vizinhos combinam'} com você.
+      <div class="sub">${matches.length} ${matches.length === 1 ? 'amigo combina' : 'amigos combinam'} com você.
         As <b style="color:var(--accent)">trocas perfeitas</b> (mão dupla) aparecem primeiro.</div>
       <div class="legend">
         <span><span class="dot give"></span>Você dá</span>
@@ -632,8 +720,13 @@ async function renderMatches() {
       </div>
       ${matches.map(matchCard).join('')}
     </div>`;
+  state.matchByUser = new Map(matches.map((m) => [m.user.id, m]));
+  state.afterTrade = () => go('matches');
   app.querySelectorAll('[data-goperson]').forEach((el) => {
     el.onclick = () => go('person', Number(el.dataset.goperson));
+  });
+  app.querySelectorAll('.lb-open').forEach((el) => {
+    el.onclick = (e) => { e.stopPropagation(); openTradeModal(Number(el.dataset.trade)); };
   });
 }
 
@@ -641,8 +734,8 @@ function matchCard(m) {
   return `
     <div class="match ${m.mutual ? 'mutual' : ''}">
       <div class="head">
-        <div class="avatar" style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#04150f;font-weight:800;display:grid;place-items:center;font-size:14px">${esc(initials(m.user.name))}</div>
-        <h3 data-goperson="${m.user.id}" style="cursor:pointer">${esc(m.user.name)} <span style="color:var(--muted);font-weight:400;font-size:13px">· apto ${esc(m.user.apartment)}</span></h3>
+        <div class="avatar" style="width:36px;height:36px;background:var(--accent);color:#09090b;display:grid;place-items:center;font-size:14px">${esc(initials(m.user.name))}</div>
+        <h3 data-goperson="${m.user.id}" style="cursor:pointer">${esc(m.user.name)}</h3>
         ${m.mutual ? `<span class="tag perfect">🤝 ${m.mutual} perfeita${m.mutual > 1 ? 's' : ''}</span>` : ''}
       </div>
       <div class="block give">
@@ -653,51 +746,133 @@ function matchCard(m) {
         <div class="label">Você recebe — ${m.youGet.length}</div>
         ${m.youGet.length ? `<div class="chips">${m.youGet.map((s) => chip(s, 'get')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">—</span>`}
       </div>
+      <div class="match-actions">
+        <button class="sec lb-open" type="button" data-trade="${m.user.id}">✅ Marquei a troca</button>
+      </div>
     </div>`;
 }
 
-function updateMatchBadge(matches) {
-  const badge = $('#matchBadge');
-  const perfect = matches.reduce((n, m) => n + (m.mutual > 0 ? 1 : 0), 0);
-  if (perfect > 0) {
-    badge.textContent = perfect;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
+// ====== Lightbox: registrar troca feita ======
+function tradeChk(s, kind) {
+  return `<label class="chk"><input type="checkbox" checked value="${esc(s.code)}" data-kind="${kind}" /><span><b>${esc(s.code)}</b></span></label>`;
+}
+
+async function openTradeModal(friendId) {
+  const m = state.matchByUser && state.matchByUser.get(friendId);
+  if (!m) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <div class="lb-card">
+      <h2>Marcar troca com ${esc(m.user.name.split(' ')[0])}</h2>
+      <div class="sub">Selecione o que saiu do seu álbum nesta troca. Ao confirmar, removemos esses status.</div>
+      <div class="lb-group">
+        <div class="lb-head"><span>🎯 Faltantes que você recebeu</span><button class="link" type="button" data-all="get">Selecionar todas</button></div>
+        <div class="lb-chips" data-group="get">${m.youGet.length ? m.youGet.map((s) => tradeChk(s, 'get')).join('') : '<span class="muted">nada aqui</span>'}</div>
+      </div>
+      <div class="lb-group">
+        <div class="lb-head"><span>🔁 Repetidas que você deu</span><button class="link" type="button" data-all="give">Selecionar todas</button></div>
+        <div class="lb-chips" data-group="give">${m.youGive.length ? m.youGive.map((s) => tradeChk(s, 'give')).join('') : '<span class="muted">nada aqui</span>'}</div>
+      </div>
+      <div class="lb-actions">
+        <button class="ghost" type="button" id="lbCancel">Cancelar</button>
+        <button type="button" id="lbConfirm">Confirmar troca</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  wrap.querySelector('#lbCancel').onclick = close;
+  wrap.querySelectorAll('.link[data-all]').forEach((btn) => {
+    btn.onclick = () => {
+      const boxes = [...wrap.querySelectorAll(`.lb-chips[data-group="${btn.dataset.all}"] input`)];
+      const allChecked = boxes.length && boxes.every((b) => b.checked);
+      boxes.forEach((b) => (b.checked = !allChecked));
+    };
+  });
+  wrap.querySelector('#lbConfirm').onclick = async () => {
+    const checked = (g) => [...wrap.querySelectorAll(`.lb-chips[data-group="${g}"] input:checked`)].map((b) => b.value);
+    const rmMiss = new Set(checked('get'));
+    const rmDup = new Set(checked('give'));
+    if (!rmMiss.size && !rmDup.size) { toast('Selecione ao menos uma figurinha.', true); return; }
+    try {
+      const data = await api(`/api/users/${state.user.id}`);
+      const missing = data.missing.map((s) => s.code).filter((c) => !rmMiss.has(c));
+      const duplicates = data.duplicates.map((s) => s.code).filter((c) => !rmDup.has(c));
+      await api(`/api/users/${state.user.id}/stickers`, { method: 'PUT', body: { missing, duplicates } });
+      close();
+      toast('Troca registrada! ✅');
+      if (state.afterTrade) state.afterTrade();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+// ====== Convite de amizade (link ?convite=token) ======
+async function processInvite() {
+  const token = new URLSearchParams(location.search).get('convite');
+  if (!token) return;
+  history.replaceState(null, '', location.pathname); // limpa a URL
+  try {
+    const info = await api('/api/friends/invite/' + encodeURIComponent(token));
+    if (info.isSelf) { toast('Esse é o seu próprio link de convite. 🙂'); return; }
+    if (!confirm(`Aceitar amizade com ${info.inviter.name}? Os álbuns de vocês ficarão visíveis um para o outro e o app vai cruzar as figurinhas.`)) return;
+    await api('/api/friends/accept', { method: 'POST', body: { token } });
+    toast('Agora vocês são amigos! 🤝');
+    go('friends');
+  } catch (err) {
+    toast(err.message, true);
+  }
+}
+
+// ====== Convite de grupo (link ?grupo=token) ======
+async function processGroupInvite() {
+  const token = new URLSearchParams(location.search).get('grupo');
+  if (!token) return;
+  history.replaceState(null, '', location.pathname);
+  try {
+    const info = await api('/api/groups/invite/' + encodeURIComponent(token));
+    if (info.isMember) { toast('Você já participa desse grupo.'); go('group', info.group.id); return; }
+    if (!confirm(`Entrar no grupo "${info.group.name}"? Todos os membros verão o álbum uns dos outros e o app vai cruzar as figurinhas entre todos.`)) return;
+    const { group } = await api('/api/groups/join', { method: 'POST', body: { token } });
+    toast('Você entrou no grupo! 👥');
+    go('group', group.id);
+  } catch (err) {
+    toast(err.message, true);
   }
 }
 
 // ====== Boot ======
 async function boot() {
   $('#nav').classList.remove('hidden');
-  $('#whoami').textContent = `${state.user.name} · apto ${state.user.apartment}`;
-  // Atualiza badge de trocas em segundo plano.
-  api(`/api/users/${state.user.id}/matches`).then((d) => updateMatchBadge(d.matches)).catch(() => {});
+  $('#whoami').textContent = state.user.name;
   go('profile');
+  processInvite();
+  processGroupInvite();
 }
 
-function init() {
+async function logout() {
+  if (state.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
+  try { await api('/api/logout', { method: 'POST' }); } catch (e) { /* ok */ }
+  state.user = null;
+  state.dirty = false;
+  renderAuth();
+}
+
+async function init() {
   window._go = go; // usado por onclick inline
   document.querySelectorAll('#nav button[data-view]').forEach((b) => {
     b.onclick = () => go(b.dataset.view);
   });
-  $('#logoutBtn').onclick = () => {
-    if (state.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
-    state.user = null;
-    state.dirty = false;
-    saveSession();
-    renderAuth();
-  };
+  $('#logoutBtn').onclick = logout;
 
-  const saved = localStorage.getItem('fig_user');
-  if (saved) {
-    try {
-      state.user = JSON.parse(saved);
-      boot();
-      return;
-    } catch { /* cai pro login */ }
+  // Sessao vive no cookie httpOnly; /api/me decide se ja esta logado.
+  try {
+    const data = await api('/api/me');
+    state.user = data.user;
+    await boot();
+  } catch {
+    renderAuth();
   }
-  renderAuth();
 }
 
 init();

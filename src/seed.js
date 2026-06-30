@@ -1,7 +1,10 @@
 // Popula o banco com vizinhos de exemplo para experimentar o app.
 // Uso: DATABASE_URL=... npm run seed   (depois: npm start)
 import { pool, initDb } from './db.js';
+import { hashPassword } from './auth.js';
 import { catalog } from './catalog.js';
+
+const DEMO_PASSWORD = 'senha1234';
 
 const codes = catalog.stickers.map((s) => s.code);
 const pick = (arr, n, offset) => {
@@ -23,10 +26,13 @@ async function run() {
 
   for (const p of people) {
     const { rows: [u] } = await pool.query(
-      `INSERT INTO users (name, email, apartment) VALUES ($1, $2, $3)
-       ON CONFLICT (email) DO UPDATE SET name = excluded.name, apartment = excluded.apartment
+      `INSERT INTO users (name, email, apartment, password_hash, age_confirmed)
+       VALUES ($1, $2, $3, $4, true)
+       ON CONFLICT (email) DO UPDATE SET
+         name = excluded.name, apartment = excluded.apartment,
+         password_hash = excluded.password_hash, age_confirmed = true
        RETURNING id`,
-      [p.name, p.email, p.apartment]
+      [p.name, p.email, p.apartment, hashPassword(DEMO_PASSWORD)]
     );
 
     await pool.query('DELETE FROM user_stickers WHERE user_id = $1', [u.id]);
@@ -50,7 +56,7 @@ async function run() {
     );
   }
 
-  console.log('\nSeed concluido. Rode: npm start  e entre com qualquer email acima (ex.: ana@predio.com).');
+  console.log(`\nSeed concluido. Login: qualquer email acima (ex.: ana@predio.com) com a senha "${DEMO_PASSWORD}".`);
   await pool.end();
 }
 

@@ -76,14 +76,19 @@ Variáveis opcionais:
 - `DATABASE_SSL=require` — força SSL (necessário só para conexões externas;
   a URL interna `*.railway.internal` não precisa).
 - `PG_POOL_MAX` — tamanho máximo do pool (padrão `10`).
+- `TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` — chaves do Cloudflare Turnstile
+  (verificação humano/bot). Sem definir, usa as chaves de **teste** da
+  Cloudflare (sempre passam) — troque pelas reais em produção.
 
 Para semear dados de exemplo em produção, rode `npm run seed` com a mesma
 `DATABASE_URL` (ex.: pelo shell do Railway).
 
 ## Notas
 
-- O login é leve (por e-mail, sem senha) — adequado para um grupo de confiança
-  como um condomínio. Para uso público, vale adicionar autenticação com senha.
+- Autenticação com **e-mail + senha** (hash scrypt), sessão por **cookie httpOnly**,
+  declaração **18+** obrigatória e verificação **humano/bot (Turnstile)** no cadastro.
+- Amizades por convite/aceite e grupos chegam nas próximas fases (substituem o
+  antigo cruzamento automático entre todos os usuários).
 - A lista de seleções reflete os 48 países classificados para a Copa 2026.
   A numeração das figurinhas (escudo/elenco/jogadores e seções especiais) é
   um formato plausível; ajuste `src/catalog.js` se quiser casar com a numeração

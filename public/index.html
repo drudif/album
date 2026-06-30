@@ -9,6 +9,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
 </head>
 <body>
@@ -23,10 +24,10 @@
       </div>
     </div>
     <nav id="nav" class="nav hidden">
-      <button data-view="profile">Meu Álbum</button>
-      <button data-view="people">Vizinhos</button>
-      <button data-view="search">Buscar</button>
-      <button data-view="matches">Trocas <span id="matchBadge" class="badge hidden">0</span></button>
+      <button data-view="profile" class="active">Meu Álbum</button>
+      <button data-view="friends">Amigos</button>
+      <button data-view="groups">Grupos</button>
+      <button data-view="matches">Trocas</button>
       <span class="spacer"></span>
       <span id="whoami" class="whoami"></span>
       <button id="logoutBtn" class="ghost">Sair</button>
