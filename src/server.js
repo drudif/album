@@ -9,12 +9,39 @@ import {
   createSession, getSessionUser, destroySession,
   COOKIE, parseCookies, setSessionCookie, clearSessionCookie,
   turnstileSiteKey, turnstileIsTest, verifyTurnstile,
+  googleEnabled, googleAuthUrl, googleExchange,
 } from './auth.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.set('trust proxy', true); // atras do proxy do Railway (x-forwarded-*)
+app.set('trust proxy', 1); // confia apenas no proxy do Railway (1 hop)
 app.use(express.json({ limit: '256kb' }));
+
+// Cabecalhos de seguranca (defesa em profundidade).
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: blob:",
+  "connect-src 'self' https://challenges.cloudflare.com",
+  "frame-src https://challenges.cloudflare.com",
+  "frame-ancestors 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', CSP);
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
 const PORT = process.env.PORT || 3000;
@@ -39,10 +66,8 @@ const requireAuth = (req, res, next) =>
     next();
   }).catch(next);
 
-const clientIp = (req) =>
-  req.headers['cf-connecting-ip'] ||
-  (req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-  req.socket.remoteAddress;
+// Com trust proxy=1, req.ip ja e o IP real do cliente (menos spoofavel).
+const clientIp = (req) => req.ip || req.socket.remoteAddress;
 
 // Rate limit simples em memoria (defesa extra contra brute force/spam).
 const _rl = new Map();
@@ -58,10 +83,11 @@ const rateLimit = (max, windowMs) => (req, res, next) => {
 const authLimit = rateLimit(20, 10 * 60 * 1000); // 20 tentativas / 10 min por IP
 
 // ---------- helpers ----------
-function publicUser(u) {
+// Por privacidade, o e-mail só é exposto para o próprio usuário (withEmail).
+function publicUser(u, withEmail = false) {
   if (!u) return null;
-  const o = { id: u.id, name: u.name, email: u.email };
-  if (u.apartment) o.apartment = u.apartment;
+  const o = { id: u.id, name: u.name };
+  if (withEmail) o.email = u.email;
   return o;
 }
 function getUser(id) { return first('SELECT * FROM users WHERE id = $1', [id]); }
@@ -142,8 +168,55 @@ async function canSeeAlbum(me, target) {
 
 // ---------- config publica (site key do Turnstile) ----------
 app.get('/api/config', (req, res) => {
-  res.json({ turnstileSiteKey: turnstileSiteKey() });
+  res.json({ turnstileSiteKey: turnstileSiteKey(), googleEnabled: googleEnabled() });
 });
+
+// ---------- login com Google (OAuth) ----------
+const googleRedirect = (req) => {
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  return `${proto}://${req.get('host')}/api/auth/google/callback`;
+};
+
+app.get('/api/auth/google', (req, res) => {
+  if (!googleEnabled()) return res.status(404).send('Login com Google não configurado.');
+  const state = crypto.randomBytes(16).toString('hex');
+  const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+  res.append('Set-Cookie', `g_state=${state}; HttpOnly; Path=/; SameSite=Lax; Max-Age=600${secure}`);
+  res.redirect(googleAuthUrl(googleRedirect(req), state));
+});
+
+app.get('/api/auth/google/callback', h(async (req, res) => {
+  if (!googleEnabled()) return res.status(404).send('Login com Google não configurado.');
+  const { code, state } = req.query;
+  const cookieState = req.cookies['g_state'];
+  res.append('Set-Cookie', 'g_state=; HttpOnly; Path=/; SameSite=Lax; Max-Age=0');
+  if (!code || !state || !cookieState || state !== cookieState) {
+    return res.status(400).send('Falha na verificação do login Google. <a href="/">Voltar</a>');
+  }
+  let info;
+  try {
+    info = await googleExchange(String(code), googleRedirect(req));
+  } catch (e) {
+    console.error(e);
+    return res.status(400).send('Não foi possível entrar com o Google. <a href="/">Voltar</a>');
+  }
+  if (!info.email || !info.emailVerified) {
+    return res.status(400).send('Conta Google sem e-mail verificado. <a href="/">Voltar</a>');
+  }
+  let user = await first('SELECT * FROM users WHERE google_id = $1 OR email = $2', [info.sub, info.email]);
+  if (user) {
+    if (!user.google_id) await query('UPDATE users SET google_id = $1 WHERE id = $2', [info.sub, user.id]);
+  } else {
+    // Ao entrar com Google na nossa tela, a pessoa declara 18+ (nota no front).
+    user = await first(
+      'INSERT INTO users (name, email, google_id, age_confirmed) VALUES ($1, $2, $3, true) RETURNING *',
+      [info.name, info.email, info.sub]
+    );
+  }
+  const { token, expires } = await createSession(user.id);
+  setSessionCookie(res, token, expires);
+  res.redirect('/');
+}));
 
 // ---------- catalogo ----------
 app.get('/api/catalog', (req, res) => {
@@ -175,7 +248,7 @@ app.post('/api/register', authLimit, h(async (req, res) => {
   );
   const { token, expires } = await createSession(u.id);
   setSessionCookie(res, token, expires);
-  res.json({ user: publicUser(u) });
+  res.json({ user: publicUser(u, true) });
 }));
 
 app.post('/api/login', authLimit, h(async (req, res) => {
@@ -192,7 +265,7 @@ app.post('/api/login', authLimit, h(async (req, res) => {
   }
   const { token, expires } = await createSession(user.id);
   setSessionCookie(res, token, expires);
-  res.json({ user: publicUser(user) });
+  res.json({ user: publicUser(user, true) });
 }));
 
 app.post('/api/logout', h(async (req, res) => {
@@ -204,7 +277,7 @@ app.post('/api/logout', h(async (req, res) => {
 app.get('/api/me', h(async (req, res) => {
   const u = await loadUser(req);
   if (!u) return res.status(401).json({ error: 'Não autenticado.' });
-  res.json({ user: publicUser(u) });
+  res.json({ user: publicUser(u, true) });
 }));
 
 // ---------- album do usuario (escopo: o proprio) ----------
@@ -217,7 +290,7 @@ app.get('/api/users/:id', requireAuth, h(async (req, res) => {
   const target = id === req.user.id ? req.user : await getUser(id);
   if (!target) return res.status(404).json({ error: 'Usuário não encontrado.' });
   const { missing, duplicates } = await getUserStickers(id);
-  res.json({ user: publicUser(target), missing: decorate(missing), duplicates: decorate(duplicates) });
+  res.json({ user: publicUser(target, target.id === req.user.id), missing: decorate(missing), duplicates: decorate(duplicates) });
 }));
 
 app.put('/api/users/:id/stickers', requireAuth, h(async (req, res) => {
