@@ -59,8 +59,7 @@ async function go(view, arg) {
   }
   setActiveNav(view);
   if (view === 'profile') return renderProfile();
-  if (view === 'people') return renderPeople();
-  if (view === 'search') return renderSearch();
+  if (view === 'friends') return renderFriends();
   if (view === 'matches') return renderMatches();
   if (view === 'person') return renderPerson(arg);
 }
@@ -489,19 +488,35 @@ async function exportCard() {
   }, 'image/png');
 }
 
-// ====== Vizinhos ======
-async function renderPeople() {
-  app.innerHTML = `<div class="empty">Carregando vizinhos…</div>`;
-  const { users } = await api('/api/users');
-  const others = users.filter((u) => u.id !== state.user.id);
+// ====== Amigos (convite por link + aceite) ======
+async function renderFriends() {
+  app.innerHTML = `<div class="empty">Carregando amigos…</div>`;
+  const [link, data] = await Promise.all([
+    api('/api/friends/link').catch(() => ({ url: '' })),
+    api('/api/friends'),
+  ]);
+  const friends = data.friends;
   app.innerHTML = `
     <div class="card">
-      <h2>Vizinhos no álbum</h2>
-      <div class="sub">${others.length} ${others.length === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'} além de você. Clique para ver o perfil.</div>
-      ${others.length === 0
-        ? `<div class="empty"><div class="big">🏢</div>Ainda é só você por aqui.<br/>Chame os vizinhos para se cadastrarem!</div>`
-        : `<div class="people-grid">${others.map(personCard).join('')}</div>`}
+      <h2>Convidar amigo</h2>
+      <div class="sub">Mande seu link. Quando a pessoa <b>aceitar</b>, os álbuns de vocês
+        ficam visíveis e o app cruza o que falta com o que sobra.</div>
+      <div class="row">
+        <input id="inviteUrl" readonly value="${esc(link.url)}" />
+        <button id="copyInvite" style="flex:none">Copiar link</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Meus amigos <span style="color:var(--muted);font-weight:400">(${friends.length})</span></h2>
+      ${friends.length === 0
+        ? `<div class="empty"><div class="big">🤝</div>Você ainda não tem amigos por aqui.<br/>Compartilhe seu link de convite!</div>`
+        : `<div class="people-grid">${friends.map(personCard).join('')}</div>`}
     </div>`;
+  $('#copyInvite').onclick = async () => {
+    try { await navigator.clipboard.writeText(link.url); }
+    catch { const i = $('#inviteUrl'); i.select(); document.execCommand('copy'); }
+    toast('Link copiado! 📋');
+  };
   app.querySelectorAll('.person').forEach((el) => (el.onclick = () => go('person', Number(el.dataset.id))));
 }
 
@@ -510,7 +525,6 @@ function personCard(u) {
     <div class="person" data-id="${u.id}">
       <div class="avatar">${esc(initials(u.name))}</div>
       <h3>${esc(u.name)}</h3>
-      <div class="apt">🏠 Apto ${esc(u.apartment)}</div>
       <div class="mini">
         <span class="g">🔁 ${u.duplicates} repetidas</span>
         <span class="n">🎯 ${u.missing} faltando</span>
@@ -529,13 +543,13 @@ async function renderPerson(id) {
   const match = matchData.matches.find((m) => m.user.id === id);
 
   app.innerHTML = `
-    <button class="backlink" onclick="window._go('people')">← Voltar para vizinhos</button>
+    <button class="backlink" onclick="window._go('friends')">← Voltar para amigos</button>
     <div class="card">
       <div class="match-head" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-        <div class="avatar" style="width:46px;height:46px;border-radius:50%;background:var(--accent);color:#04150f;font-weight:800;display:grid;place-items:center;">${esc(initials(u.name))}</div>
+        <div class="avatar" style="width:46px;height:46px;background:var(--accent);color:#09090b;display:grid;place-items:center;">${esc(initials(u.name))}</div>
         <div>
           <h2 style="margin:0">${esc(u.name)}</h2>
-          <div class="apt" style="color:var(--muted);font-size:13px">🏠 Apto ${esc(u.apartment)} · ${esc(u.email)}</div>
+          <div class="apt" style="color:var(--muted);font-size:13px">${esc(u.email || '')}</div>
         </div>
       </div>
       ${match ? matchBox(match) : `<div class="sub" style="margin-top:12px">Vocês não têm trocas em comum no momento.</div>`}
@@ -577,66 +591,10 @@ function chipList(arr, kind, highlightAgainst) {
   return `<div class="chips">${arr.map((s) => chip(s, kind)).join('')}</div>`;
 }
 
-// ====== Busca por figurinha ======
-function renderSearch() {
-  app.innerHTML = `
-    <div class="card">
-      <h2>Buscar figurinha</h2>
-      <div class="sub">Digite um código (ex.: <b>BRA07</b>), país (ex.: <b>Argentina</b>) ou trecho.
-        Veja quem tem repetida pra oferecer e quem precisa.</div>
-      <input id="searchInput" placeholder="🔎 Buscar figurinha por código ou país…" autofocus />
-      <div id="searchResults" style="margin-top:16px"></div>
-    </div>`;
-  const inp = $('#searchInput');
-  let t;
-  inp.oninput = () => {
-    clearTimeout(t);
-    t = setTimeout(() => doSearch(inp.value.trim()), 250);
-  };
-}
-
-async function doSearch(q) {
-  const box = $('#searchResults');
-  if (!q) { box.innerHTML = ''; return; }
-  box.innerHTML = `<div class="empty">Buscando…</div>`;
-  const { results } = await api(`/api/search?q=${encodeURIComponent(q)}`);
-  if (!results.length) {
-    box.innerHTML = `<div class="empty"><div class="big">🔍</div>Ninguém cadastrou essa figurinha ainda.</div>`;
-    return;
-  }
-  box.innerHTML = results.slice(0, 60).map(searchRow).join('');
-  box.querySelectorAll('[data-goperson]').forEach((el) => {
-    el.onclick = () => go('person', Number(el.dataset.goperson));
-  });
-}
-
-function searchRow(r) {
-  const me = state.user.id;
-  const ppl = (arr, kind) =>
-    arr.length
-      ? arr.map((p) =>
-          `<span class="chip ${kind}" data-goperson="${p.id}" style="cursor:pointer">${p.id === me ? 'Você' : esc(p.name)} · apto ${esc(p.apartment)}</span>`
-        ).join('')
-      : `<span style="color:var(--muted);font-size:13px">ninguém</span>`;
-  return `
-    <div class="match" style="margin-bottom:10px">
-      <div class="head"><h3>${r.sticker.code}</h3></div>
-      <div class="block give">
-        <div class="label" style="color:var(--give)">🔁 Tem repetida para oferecer (${r.offers.length})</div>
-        <div class="chips">${ppl(r.offers, 'give')}</div>
-      </div>
-      <div class="block get">
-        <div class="label" style="color:var(--get)">🎯 Está precisando (${r.needs.length})</div>
-        <div class="chips">${ppl(r.needs, 'get')}</div>
-      </div>
-    </div>`;
-}
-
-// ====== Trocas / cruzamentos ======
+// ====== Trocas / cruzamentos (entre amigos) ======
 async function renderMatches() {
   app.innerHTML = `<div class="empty">Procurando trocas…</div>`;
-  const { matches } = await api(`/api/users/${state.user.id}/matches`);
-  updateMatchBadge(matches);
+  const { matches } = await api('/api/matches');
 
   if (!matches.length) {
     app.innerHTML = `
@@ -644,8 +602,8 @@ async function renderMatches() {
         <h2>Suas trocas</h2>
         <div class="empty"><div class="big">🤷</div>
           Nenhuma troca encontrada ainda.<br/>
-          Cadastre suas figurinhas que faltam e repetidas em <b>Meu Álbum</b>,
-          e peça pros vizinhos fazerem o mesmo!</div>
+          Marque o que falta e o que tem repetida em <b>Meu Álbum</b>,
+          e convide amigos em <b>Amigos</b>.</div>
       </div>`;
     return;
   }
@@ -653,7 +611,7 @@ async function renderMatches() {
   app.innerHTML = `
     <div class="card">
       <h2>Suas trocas 🔄</h2>
-      <div class="sub">${matches.length} ${matches.length === 1 ? 'vizinho combina' : 'vizinhos combinam'} com você.
+      <div class="sub">${matches.length} ${matches.length === 1 ? 'amigo combina' : 'amigos combinam'} com você.
         As <b style="color:var(--accent)">trocas perfeitas</b> (mão dupla) aparecem primeiro.</div>
       <div class="legend">
         <span><span class="dot give"></span>Você dá</span>
@@ -670,8 +628,8 @@ function matchCard(m) {
   return `
     <div class="match ${m.mutual ? 'mutual' : ''}">
       <div class="head">
-        <div class="avatar" style="width:34px;height:34px;border-radius:50%;background:var(--accent);color:#04150f;font-weight:800;display:grid;place-items:center;font-size:14px">${esc(initials(m.user.name))}</div>
-        <h3 data-goperson="${m.user.id}" style="cursor:pointer">${esc(m.user.name)} <span style="color:var(--muted);font-weight:400;font-size:13px">· apto ${esc(m.user.apartment)}</span></h3>
+        <div class="avatar" style="width:36px;height:36px;background:var(--accent);color:#09090b;display:grid;place-items:center;font-size:14px">${esc(initials(m.user.name))}</div>
+        <h3 data-goperson="${m.user.id}" style="cursor:pointer">${esc(m.user.name)}</h3>
         ${m.mutual ? `<span class="tag perfect">🤝 ${m.mutual} perfeita${m.mutual > 1 ? 's' : ''}</span>` : ''}
       </div>
       <div class="block give">
@@ -685,14 +643,20 @@ function matchCard(m) {
     </div>`;
 }
 
-function updateMatchBadge(matches) {
-  const badge = $('#matchBadge');
-  const perfect = matches.reduce((n, m) => n + (m.mutual > 0 ? 1 : 0), 0);
-  if (perfect > 0) {
-    badge.textContent = perfect;
-    badge.classList.remove('hidden');
-  } else {
-    badge.classList.add('hidden');
+// ====== Convite de amizade (link ?convite=token) ======
+async function processInvite() {
+  const token = new URLSearchParams(location.search).get('convite');
+  if (!token) return;
+  history.replaceState(null, '', location.pathname); // limpa a URL
+  try {
+    const info = await api('/api/friends/invite/' + encodeURIComponent(token));
+    if (info.isSelf) { toast('Esse é o seu próprio link de convite. 🙂'); return; }
+    if (!confirm(`Aceitar amizade com ${info.inviter.name}? Os álbuns de vocês ficarão visíveis um para o outro e o app vai cruzar as figurinhas.`)) return;
+    await api('/api/friends/accept', { method: 'POST', body: { token } });
+    toast('Agora vocês são amigos! 🤝');
+    go('friends');
+  } catch (err) {
+    toast(err.message, true);
   }
 }
 
@@ -701,6 +665,7 @@ async function boot() {
   $('#nav').classList.remove('hidden');
   $('#whoami').textContent = state.user.name;
   go('profile');
+  processInvite();
 }
 
 async function logout() {

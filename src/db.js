@@ -76,8 +76,21 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
   `);
 
+  // Amizades (mutuas, apos aceite). Convencao user_a < user_b.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS friendships (
+      user_a     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      user_b     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_a, user_b),
+      CHECK (user_a < user_b)
+    );
+  `);
+
   // Migracoes idempotentes (bancos ja existentes).
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS age_confirmed BOOLEAN NOT NULL DEFAULT false;`);
   await pool.query(`ALTER TABLE users ALTER COLUMN apartment DROP NOT NULL;`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS invite_token TEXT;`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_invite_token ON users(invite_token) WHERE invite_token IS NOT NULL;`);
 }
