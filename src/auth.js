@@ -92,6 +92,49 @@ export function turnstileIsTest() {
   return TS_SECRET === '1x0000000000000000000000000000000AA';
 }
 
+// ---------- Google OAuth (Authorization Code) ----------
+const GOOGLE_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+
+export function googleEnabled() {
+  return !!(GOOGLE_ID && GOOGLE_SECRET);
+}
+
+export function googleAuthUrl(redirectUri, state) {
+  const p = new URLSearchParams({
+    client_id: GOOGLE_ID,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'online',
+    prompt: 'select_account',
+  });
+  return 'https://accounts.google.com/o/oauth2/v2/auth?' + p.toString();
+}
+
+// Troca o code por tokens e extrai o perfil do id_token (recebido direto do
+// endpoint do Google sobre TLS, portanto confiavel).
+export async function googleExchange(code, redirectUri) {
+  const body = new URLSearchParams({
+    code, client_id: GOOGLE_ID, client_secret: GOOGLE_SECRET,
+    redirect_uri: redirectUri, grant_type: 'authorization_code',
+  });
+  const r = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body,
+  });
+  if (!r.ok) throw new Error('Falha na troca de token com o Google.');
+  const data = await r.json();
+  if (!data.id_token) throw new Error('Google nao retornou id_token.');
+  const payload = JSON.parse(Buffer.from(data.id_token.split('.')[1], 'base64url').toString('utf8'));
+  return {
+    sub: payload.sub,
+    email: (payload.email || '').toLowerCase(),
+    emailVerified: payload.email_verified === true || payload.email_verified === 'true',
+    name: payload.name || (payload.email || '').split('@')[0],
+  };
+}
+
 export async function verifyTurnstile(token, ip) {
   if (!token) return false;
   try {

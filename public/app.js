@@ -109,6 +109,10 @@ async function renderAuth() {
         <div id="tsWidget" class="ts-widget"></div>
         <button type="submit" style="width:100%">Entrar</button>
       </form>
+      ${cfg.googleEnabled ? `
+      <div class="orsep"><span>ou</span></div>
+      <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> Entrar com Google</a>
+      <div class="oauth-note">Ao entrar com Google, você declara ter 18 anos ou mais.</div>` : ''}
     </div>`;
 
   let mode = 'register';
