@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Álbum da Copa · 2026</title>
+  <title>Completa Aí · Copa 2026</title>
   <meta name="theme-color" content="#f8f4e8" />
+  <script>try{var t=localStorage.getItem('theme')||((window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)?'dark':'light');document.documentElement.dataset.theme=t;}catch(e){}</script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
@@ -19,19 +20,22 @@
     <div class="brand">
       <span class="ball">⚽</span>
       <div class="brand-txt">
-        <strong class="glitch" data-text="ÁLBUM DA COPA">ÁLBUM DA COPA</strong>
-        <span class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a></span>
+        <strong class="glitch" data-text="COMPLETA AÍ">COMPLETA AÍ</strong>
+        <span class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></span>
       </div>
     </div>
-    <nav id="nav" class="nav hidden">
-      <button data-view="profile" class="active">Meu Álbum</button>
-      <button data-view="friends">Amigos</button>
-      <button data-view="groups">Grupos</button>
-      <button data-view="matches">Trocas</button>
-      <span class="spacer"></span>
-      <span id="whoami" class="whoami"></span>
-      <button id="logoutBtn" class="ghost">Sair</button>
-    </nav>
+    <div class="top-right">
+      <button id="themeToggle" class="theme-toggle" title="Alternar tema" aria-label="Alternar tema">🌙</button>
+      <nav id="nav" class="nav hidden">
+        <button data-view="profile" class="active">Meu Álbum</button>
+        <button data-view="friends">Amigos</button>
+        <button data-view="groups">Grupos</button>
+        <button data-view="matches">Trocas</button>
+        <span class="spacer"></span>
+        <span id="whoami" class="whoami"></span>
+        <button id="logoutBtn" class="ghost">Sair</button>
+      </nav>
+    </div>
   </header>
 
   <main id="app"></main>
