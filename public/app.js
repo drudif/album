@@ -69,13 +69,15 @@ async function go(view, arg) {
 // ====== Tela de login / cadastro ======
 async function renderAuth() {
   $('#nav').classList.add('hidden');
+  document.body.classList.remove('logged-in'); // cursor custom volta só na home
   let cfg = { turnstileSiteKey: '' };
   try { cfg = await api('/api/config'); } catch (e) { /* segue sem */ }
 
   app.innerHTML = `
+    <div class="auth-grid">
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
-      <h1 class="glitch" data-text="COMPLETA AÍ">COMPLETA<br/>AÍ</h1>
+      <h1 class="glitch" data-text="COMPLETA AÍ">COM<br/>PLETA<br/>AÍ</h1>
       <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos.
          O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
       <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
@@ -84,7 +86,7 @@ async function renderAuth() {
         <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
       </div></div>
     </div>
-    <div class="card" style="max-width:480px;">
+    <div class="card auth-card">
       <div class="tabs">
         <button id="tabReg" class="active">Criar conta</button>
         <button id="tabLogin">Já tenho conta</button>
@@ -113,6 +115,7 @@ async function renderAuth() {
       <div class="orsep"><span>ou</span></div>
       <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> Entrar com Google</a>
       <div class="oauth-note">Ao entrar com Google, você declara ter 18 anos ou mais.</div>` : ''}
+    </div>
     </div>`;
 
   let mode = 'register';
@@ -848,6 +851,7 @@ async function processGroupInvite() {
 // ====== Boot ======
 async function boot() {
   $('#nav').classList.remove('hidden');
+  document.body.classList.add('logged-in'); // some com o cursor custom fora da home
   $('#whoami').textContent = state.user.name;
   go('profile');
   processInvite();
@@ -860,24 +864,6 @@ async function logout() {
   state.user = null;
   state.dirty = false;
   renderAuth();
-}
-
-// ====== Tema (claro/escuro) ======
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  const b = $('#themeToggle');
-  if (b) b.textContent = t === 'dark' ? '☀️' : '🌙';
-}
-function initTheme() {
-  const saved = localStorage.getItem('theme') ||
-    (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
-  applyTheme(saved);
-  const b = $('#themeToggle');
-  if (b) b.onclick = () => {
-    const nt = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('theme', nt);
-    applyTheme(nt);
-  };
 }
 
 // ====== Reportar bug (lightbox -> e-mail) ======
@@ -919,7 +905,6 @@ function openBugReport() {
 
 async function init() {
   window._go = go; // usado por onclick inline
-  initTheme();
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('.report-bugs');
     if (b) { e.preventDefault(); openBugReport(); }
