@@ -37,6 +37,26 @@ const esc = (s) =>
   String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const initials = (name) => name.trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
 
+// Linha de crédito ("powered by … · made by <autor> · reporte bugs") a partir do content.js
+function creditHtml() {
+  const c = C.meta.credit;
+  return `${esc(c.prefix)}<a href="${esc(c.authorUrl)}" target="_blank" rel="noopener noreferrer">${esc(c.authorName)}</a> · <a href="#" class="report-bugs">${esc(c.reportBugs)}</a>`;
+}
+
+// Aplica marca/título (aba do navegador + cabeçalho) a partir do content.js
+function applyMeta() {
+  document.title = C.meta.pageTitle;
+  const brand = document.querySelector('.brand strong');
+  if (brand) { brand.textContent = C.meta.headerTitle; brand.setAttribute('data-text', C.meta.headerTitle); }
+  const hc = document.querySelector('.topbar .credit');
+  if (hc) hc.innerHTML = creditHtml();
+  const nav = C.nav;
+  const setNav = (v, t) => { const b = document.querySelector(`#nav button[data-view="${v}"]`); if (b) b.textContent = t; };
+  setNav('profile', nav.profile); setNav('friends', nav.friends);
+  setNav('groups', nav.groups); setNav('matches', nav.matches);
+  const out = document.querySelector('#logoutBtn'); if (out) out.textContent = nav.logout;
+}
+
 // ====== Catalogo ======
 async function loadCatalog() {
   if (state.catalog) return;
@@ -54,7 +74,7 @@ function setActiveNav(view) {
 
 async function go(view, arg) {
   if (state.dirty && view !== 'profile') {
-    if (!confirm('Você tem alterações não salvas no seu álbum. Sair mesmo assim?')) return;
+    if (!confirm(C.profile.unsavedLeave)) return;
     state.dirty = false;
   }
   setActiveNav(view);
@@ -73,48 +93,46 @@ async function renderAuth() {
   let cfg = { turnstileSiteKey: '' };
   try { cfg = await api('/api/config'); } catch (e) { /* segue sem */ }
 
+  const h = C.home;
+  const marq = h.marquee.map((s) => `<span>${esc(s)}</span>`).join('');
   app.innerHTML = `
     <div class="auth-grid">
     <div class="hero">
-      <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
-      <h1 class="glitch" data-text="Completaí">Com-<br/>pletaí</h1>
-      <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos.
-         O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
-      <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
-      <div class="marquee" aria-hidden="true"><div>
-        <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
-        <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
-      </div></div>
+      <span class="sticker-badge">${esc(h.badge)}</span>
+      <h1 class="glitch" data-text="${esc(h.titleFull)}">${esc(h.titleLine1)}<br/>${esc(h.titleLine2)}</h1>
+      <p>${esc(h.description)}</p>
+      <div class="credit">${creditHtml()}</div>
+      <div class="marquee" aria-hidden="true"><div>${marq}${marq}</div></div>
     </div>
     <div class="card auth-card">
       <div class="tabs">
-        <button id="tabReg" class="active">Criar conta</button>
-        <button id="tabLogin">Já tenho conta</button>
+        <button id="tabReg" class="active">${esc(h.tabRegister)}</button>
+        <button id="tabLogin">${esc(h.tabLogin)}</button>
       </div>
       <form id="authForm">
         <div class="field" id="nameField">
-          <label>Nome</label>
-          <input name="name" placeholder="Seu nome" autocomplete="name" />
+          <label>${esc(h.nameLabel)}</label>
+          <input name="name" placeholder="${esc(h.namePlaceholder)}" autocomplete="name" />
         </div>
         <div class="field">
-          <label>E-mail</label>
-          <input name="email" type="email" placeholder="voce@email.com" autocomplete="email" />
+          <label>${esc(h.emailLabel)}</label>
+          <input name="email" type="email" placeholder="${esc(h.emailPlaceholder)}" autocomplete="email" />
         </div>
         <div class="field">
-          <label>Senha</label>
-          <input name="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="current-password" />
+          <label>${esc(h.passwordLabel)}</label>
+          <input name="password" type="password" placeholder="${esc(h.passwordPlaceholder)}" autocomplete="current-password" />
         </div>
         <label class="check" id="ageField">
           <input name="age" type="checkbox" />
-          <span>Declaro que tenho <b>18 anos ou mais</b>.</span>
+          <span>${h.ageText}</span>
         </label>
         <div id="tsWidget" class="ts-widget"></div>
-        <button type="submit" style="width:100%">Entrar</button>
+        <button type="submit" style="width:100%">${esc(h.submit)}</button>
       </form>
       ${cfg.googleEnabled ? `
-      <div class="orsep"><span>ou</span></div>
-      <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> Entrar com Google</a>
-      <div class="oauth-note">Ao entrar com Google, você declara ter 18 anos ou mais.</div>` : ''}
+      <div class="orsep"><span>${esc(h.orSeparator)}</span></div>
+      <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> ${esc(h.googleButton)}</a>
+      <div class="oauth-note">${esc(h.googleNote)}</div>` : ''}
     </div>
     </div>`;
 
@@ -151,7 +169,7 @@ async function renderAuth() {
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
     const f = e.target;
-    if (cfg.turnstileSiteKey && !tsToken) { toast('Confirme que você é humano.', true); return; }
+    if (cfg.turnstileSiteKey && !tsToken) { toast(C.home.humanCheck, true); return; }
     try {
       let data;
       if (mode === 'register') {
@@ -162,13 +180,13 @@ async function renderAuth() {
             ageConfirmed: f.age.checked, turnstileToken: tsToken,
           },
         });
-        toast('Conta criada! 🎉');
+        toast(C.home.accountCreated);
       } else {
         data = await api('/api/login', {
           method: 'POST',
           body: { email: f.email.value, password: f.password.value, turnstileToken: tsToken },
         });
-        toast('Bem-vindo de volta!');
+        toast(C.home.welcomeBack);
       }
       state.user = data.user;
       await boot();
@@ -181,7 +199,8 @@ async function renderAuth() {
 
 // ====== Meu album (editor) ======
 async function renderProfile() {
-  app.innerHTML = `<div class="empty">Carregando seu álbum…</div>`;
+  const P = C.profile;
+  app.innerHTML = `<div class="empty">${esc(P.loading)}</div>`;
   await loadCatalog();
   const data = await api(`/api/users/${state.user.id}`);
 
@@ -193,25 +212,24 @@ async function renderProfile() {
 
   app.innerHTML = `
     <div class="card">
-      <h2>Meu Álbum — Copa 2026</h2>
-      <div class="sub">Marque o que <b style="color:var(--get)">falta</b> (quero) e o que está
-        <b style="color:var(--give)">repetida</b> (tenho de sobra). Use a busca para achar rápido.</div>
+      <h2>${esc(P.title)}</h2>
+      <div class="sub">${P.sub}</div>
       <div class="stats" id="profileStats"></div>
       <div class="legend">
-        <span><span class="dot get"></span>Falta — preciso desta</span>
-        <span><span class="dot give"></span>Repetida — tenho pra trocar</span>
+        <span><span class="dot get"></span>${esc(P.legendMissing)}</span>
+        <span><span class="dot give"></span>${esc(P.legendDuplicate)}</span>
       </div>
       <div class="editor-toolbar">
-        <input id="filterInput" placeholder="🔎 Filtrar por código ou país (ex.: BRA, 07, Argentina)" />
-        <button class="sec" id="expandAll">Expandir tudo</button>
-        <button class="sec" id="collapseAll">Recolher</button>
-        <button class="sec" id="exportBtn">📤 Exportar meu álbum</button>
+        <input id="filterInput" placeholder="${esc(P.filterPlaceholder)}" />
+        <button class="sec" id="expandAll">${esc(P.expandAll)}</button>
+        <button class="sec" id="collapseAll">${esc(P.collapseAll)}</button>
+        <button class="sec" id="exportBtn">${esc(P.exportBtn)}</button>
       </div>
       <div id="sections"></div>
       <div class="savebar">
         <span class="muted" id="dirtyHint"></span>
-        <button class="ghost" id="resetBtn">Desfazer</button>
-        <button id="saveBtn">Salvar álbum</button>
+        <button class="ghost" id="resetBtn">${esc(P.undo)}</button>
+        <button id="saveBtn">${esc(P.save)}</button>
       </div>
     </div>`;
 
@@ -231,11 +249,11 @@ function updateProfileStats() {
   for (const v of state.edit.values()) v === 'missing' ? miss++ : dup++;
   const have = state.catalog.total - miss; // estimativa: o que nao falta
   $('#profileStats').innerHTML = `
-    <div class="stat"><b>${state.catalog.total}</b><span>no álbum</span></div>
-    <div class="stat"><b style="color:var(--get)">${miss}</b><span>faltando</span></div>
-    <div class="stat"><b style="color:var(--give)">${dup}</b><span>repetidas</span></div>`;
+    <div class="stat"><b>${state.catalog.total}</b><span>${esc(C.profile.statTotal)}</span></div>
+    <div class="stat"><b style="color:var(--get)">${miss}</b><span>${esc(C.profile.statMissing)}</span></div>
+    <div class="stat"><b style="color:var(--give)">${dup}</b><span>${esc(C.profile.statDuplicates)}</span></div>`;
   const hint = $('#dirtyHint');
-  if (hint) hint.textContent = state.dirty ? 'Alterações não salvas…' : 'Tudo salvo ✓';
+  if (hint) hint.textContent = state.dirty ? C.profile.dirtyUnsaved : C.profile.dirtySaved;
 }
 
 function renderSections(filter) {
@@ -254,7 +272,7 @@ function renderSections(filter) {
     if (matches.length === 0) continue;
     // Cabecalho de grupo da Copa (so para selecoes), antes da 1a visivel do grupo.
     if (sec.group && sec.group !== lastGroup) {
-      html += `<div class="group-head">Grupo ${esc(sec.group)}</div>`;
+      html += `<div class="group-head">${esc(C.profile.groupHead(sec.group))}</div>`;
       lastGroup = sec.group;
     }
     const open = filter ? 'open' : '';
@@ -292,12 +310,12 @@ function renderSections(filter) {
         <summary>
           <span class="flag">${sec.flag || '⚽'}</span>
           <span class="title">${esc(sec.title)}</span>
-          <span class="count">${selCount ? selCount + ' marcadas · ' : ''}${matches.length} fig.</span>
+          <span class="count">${esc(C.profile.sectionCount(selCount, matches.length))}</span>
         </summary>
         ${body}
       </details>`;
   }
-  wrap.innerHTML = html || `<div class="empty">Nenhuma figurinha encontrada para esse filtro.</div>`;
+  wrap.innerHTML = html || `<div class="empty">${esc(C.profile.emptyFilter)}</div>`;
 
   wrap.querySelectorAll('.toggles button').forEach((btn) => {
     btn.onclick = () => toggleSticker(btn.dataset.code, btn.dataset.kind);
@@ -343,8 +361,8 @@ function stickerRow(s, pos) {
       <span class="slot-num"><i>${prefix}</i><b>${num}</b></span>
       <span class="slot-ph${ic.shine ? ' shine' : ''}" aria-hidden="true">${ic.svg}</span>
       <span class="toggles">
-        <button class="miss ${status === 'missing' ? 'on' : ''}" data-code="${s.code}" data-kind="missing" title="Falta">Falta</button>
-        <button class="dup ${status === 'duplicate' ? 'on' : ''}" data-code="${s.code}" data-kind="duplicate" title="Repetida">Rep.</button>
+        <button class="miss ${status === 'missing' ? 'on' : ''}" data-code="${s.code}" data-kind="missing" title="${esc(C.profile.stickerMissing)}">${esc(C.profile.stickerMissing)}</button>
+        <button class="dup ${status === 'duplicate' ? 'on' : ''}" data-code="${s.code}" data-kind="duplicate" title="${esc(C.profile.legendDuplicate)}">${esc(C.profile.stickerDuplicate)}</button>
       </span>
     </div>`;
 }
@@ -377,7 +395,7 @@ async function saveAlbum() {
     });
     state.dirty = false;
     updateProfileStats();
-    toast('Álbum salvo! ✅');
+    toast(C.profile.saved);
   } catch (err) {
     toast(err.message, true);
   }
@@ -428,15 +446,16 @@ async function exportCard() {
   ctx.strokeStyle = INK; ctx.lineWidth = 10; ctx.strokeRect(22, 22, W - 44, H - 44);
 
   const M = 70;
+  const X = C.exportCard;
   // badge
   block(M, 64, 430, 54, 27, ACID);
   ctx.fillStyle = INK; ctx.font = '700 22px "Space Grotesk"'; ctx.textBaseline = 'middle';
-  ctx.fillText('⚽  COPA 2026 · MEU ÁLBUM', M + 24, 64 + 29);
+  ctx.fillText(X.badge, M + 24, 64 + 29);
 
   // titulo
   ctx.textBaseline = 'alphabetic'; ctx.fillStyle = INK; ctx.font = '400 92px "Dela Gothic One"';
-  ctx.fillText('ÁLBUM', M, 232);
-  ctx.fillText('DA COPA', M, 232 + 90);
+  ctx.fillText(X.titleLine1, M, 232);
+  ctx.fillText(X.titleLine2, M, 232 + 90);
 
   // usuario
   ctx.font = '700 30px "Space Grotesk"';
@@ -450,11 +469,11 @@ async function exportCard() {
   ctx.fillStyle = INK; ctx.font = '400 64px "Dela Gothic One"';
   ctx.fillText(String(miss.length), M + 26, boxY + 78);
   ctx.font = '700 22px "Space Grotesk"'; ctx.fillStyle = INK;
-  ctx.fillText('FALTAM (QUERO)', M + 26, boxY + 108);
+  ctx.fillText(X.boxMissing, M + 26, boxY + 108);
   ctx.fillStyle = ACID; ctx.font = '400 64px "Dela Gothic One"';
   ctx.fillText(String(dup.length), M + boxW + 24 + 26, boxY + 78);
   ctx.font = '700 22px "Space Grotesk"';
-  ctx.fillText('REPETIDAS (TROCO)', M + boxW + 24 + 26, boxY + 108);
+  ctx.fillText(X.boxDuplicates, M + boxW + 24 + 26, boxY + 108);
 
   // desenha lista de codigos em "chips", com truncamento por linhas
   const drawCodes = (codes, x, y, maxW, maxRows, fill, txt) => {
@@ -470,7 +489,7 @@ async function exportCard() {
     };
     if (!codes.length) {
       ctx.fillStyle = MUT; ctx.font = '500 24px "Space Grotesk"'; ctx.textBaseline = 'middle';
-      ctx.fillText('— nada marcado —', x, y + h / 2);
+      ctx.fillText(X.nothingMarked, x, y + h / 2);
       return;
     }
     for (let i = 0; i < codes.length; i++) {
@@ -491,40 +510,41 @@ async function exportCard() {
 
   const contentW = W - M * 2;
   ctx.fillStyle = INK; ctx.font = '700 24px "Space Grotesk"'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('🎯 FALTAM', M, 658);
+  ctx.fillText(X.listMissing, M, 658);
   drawCodes(miss, M, 680, contentW, 4, ACID, INK);
 
   ctx.fillStyle = INK; ctx.font = '700 24px "Space Grotesk"'; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('🔁 REPETIDAS', M, 968);
+  ctx.fillText(X.listDuplicates, M, 968);
   drawCodes(dup, M, 990, contentW, 4, INK, ACID);
 
   // rodape
   ctx.fillStyle = INK; ctx.fillRect(22, H - 96, W - 44, 2);
   ctx.fillStyle = MUT; ctx.font = '500 22px "Space Grotesk"'; ctx.textBaseline = 'middle';
-  ctx.fillText('powered by claude code · made by fernando drudi', M, H - 58);
+  ctx.fillText(X.footer, M, H - 58);
 
   // exporta / compartilha
   cv.toBlob(async (blob) => {
-    if (!blob) { toast('Não consegui gerar o card.', true); return; }
-    const file = new File([blob], 'meu-album-copa-2026.png', { type: 'image/png' });
+    if (!blob) { toast(X.genError, true); return; }
+    const file = new File([blob], X.fileName, { type: 'image/png' });
     try {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: 'Meu Álbum da Copa', text: 'Minhas figurinhas: faltantes e repetidas 🔁' });
+        await navigator.share({ files: [file], title: X.shareTitle, text: X.shareText });
         return;
       }
     } catch (e) { /* cai pro download */ }
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
-    a.href = url; a.download = 'meu-album-copa-2026.png';
+    a.href = url; a.download = X.fileName;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast('Card exportado! 📤');
+    toast(X.done);
   }, 'image/png');
 }
 
 // ====== Amigos (convite por link + aceite) ======
 async function renderFriends() {
-  app.innerHTML = `<div class="empty">Carregando amigos…</div>`;
+  const F = C.friends;
+  app.innerHTML = `<div class="empty">${esc(F.loading)}</div>`;
   const [link, data] = await Promise.all([
     api('/api/friends/link').catch(() => ({ url: '' })),
     api('/api/friends'),
@@ -533,38 +553,37 @@ async function renderFriends() {
   const friends = data.friends;
   app.innerHTML = `
     <div class="card">
-      <h2>Convidar amigo</h2>
-      <div class="sub">Mande seu link. Quando a pessoa <b>aceitar</b>, os álbuns de vocês
-        ficam visíveis e o app cruza o que falta com o que sobra.</div>
+      <h2>${esc(F.inviteTitle)}</h2>
+      <div class="sub">${F.inviteSub}</div>
       <div class="row">
         <input id="inviteUrl" readonly value="${esc(inviteUrl)}" />
-        <button id="copyInvite" style="flex:none">Copiar link</button>
-        <button id="rotateInvite" class="ghost" style="flex:none" title="Gera um link novo e invalida os antigos">🔄 Novo link</button>
+        <button id="copyInvite" style="flex:none">${esc(F.copyLink)}</button>
+        <button id="rotateInvite" class="ghost" style="flex:none" title="${esc(F.newLinkTitle)}">${esc(F.newLink)}</button>
       </div>
     </div>
     <div class="card">
-      <h2>Meus amigos <span style="color:var(--muted);font-weight:400">(${friends.length})</span></h2>
+      <h2>${esc(F.listTitle)} <span style="color:var(--muted);font-weight:400">(${friends.length})</span></h2>
       ${friends.length === 0
-        ? `<div class="empty"><div class="big">🤝</div>Você ainda não tem amigos por aqui.<br/>Compartilhe seu link de convite!</div>`
+        ? `<div class="empty"><div class="big">${F.emptyIcon}</div>${F.empty}</div>`
         : `<div class="people-grid">${friends.map(personCard).join('')}</div>`}
     </div>`;
   $('#copyInvite').onclick = async () => {
     try { await navigator.clipboard.writeText(inviteUrl); }
     catch { const i = $('#inviteUrl'); i.select(); document.execCommand('copy'); }
-    toast('Link copiado! 📋');
+    toast(F.linkCopied);
   };
   $('#rotateInvite').onclick = async () => {
-    if (!confirm('Gerar um link novo? Os links antigos deixam de funcionar.')) return;
+    if (!confirm(F.confirmNewLink)) return;
     try {
       const r = await api('/api/friends/link/rotate', { method: 'POST' });
       inviteUrl = r.url; $('#inviteUrl').value = r.url;
-      toast('Novo link gerado! 🔄');
+      toast(F.newLinkDone);
     } catch (err) { toast(err.message, true); }
   };
   app.querySelectorAll('[data-unfriend]').forEach((btn) => (btn.onclick = async (e) => {
     e.stopPropagation();
-    if (!confirm('Desfazer amizade? Vocês deixam de ver o álbum um do outro.')) return;
-    try { await api('/api/friends/' + Number(btn.dataset.unfriend), { method: 'DELETE' }); toast('Amizade desfeita.'); renderFriends(); }
+    if (!confirm(F.confirmUnfriend)) return;
+    try { await api('/api/friends/' + Number(btn.dataset.unfriend), { method: 'DELETE' }); toast(F.unfriendDone); renderFriends(); }
     catch (err) { toast(err.message, true); }
   }));
   app.querySelectorAll('.person').forEach((el) => (el.onclick = () => {
@@ -576,42 +595,42 @@ async function renderFriends() {
 function personCard(u) {
   return `
     <div class="person" data-id="${u.id}">
-      <button class="card-x" data-unfriend="${u.id}" title="Desfazer amizade" aria-label="Desfazer amizade">✕</button>
+      <button class="card-x" data-unfriend="${u.id}" title="${esc(C.friends.unfriendTitle)}" aria-label="${esc(C.friends.unfriendTitle)}">✕</button>
       <div class="avatar">${esc(initials(u.name))}</div>
       <h3>${esc(u.name)}</h3>
       <div class="mini">
-        <span class="g">🔁 ${u.duplicates} repetidas</span>
-        <span class="n">🎯 ${u.missing} faltando</span>
+        <span class="g">${esc(C.friends.cardDuplicates(u.duplicates))}</span>
+        <span class="n">${esc(C.friends.cardMissing(u.missing))}</span>
       </div>
     </div>`;
 }
 
 // ====== Grupos ======
 async function renderGroups() {
-  app.innerHTML = `<div class="empty">Carregando grupos…</div>`;
+  const G = C.groups;
+  app.innerHTML = `<div class="empty">${esc(G.loading)}</div>`;
   const { groups } = await api('/api/groups');
   app.innerHTML = `
     <div class="card">
-      <h2>Criar grupo</h2>
-      <div class="sub">Crie um grupo e convide quem quiser. Todos que entrarem veem os álbuns
-        uns dos outros e o app cruza as figurinhas entre <b>todos</b> os membros.</div>
+      <h2>${esc(G.createTitle)}</h2>
+      <div class="sub">${G.createSub}</div>
       <div class="row">
-        <input id="groupName" placeholder="Nome do grupo (ex.: Galera do trampo)" maxlength="60" />
-        <button id="createGroup" style="flex:none">Criar</button>
+        <input id="groupName" placeholder="${esc(G.namePlaceholder)}" maxlength="60" />
+        <button id="createGroup" style="flex:none">${esc(G.createBtn)}</button>
       </div>
     </div>
     <div class="card">
-      <h2>Meus grupos <span style="color:var(--muted);font-weight:400">(${groups.length})</span></h2>
+      <h2>${esc(G.listTitle)} <span style="color:var(--muted);font-weight:400">(${groups.length})</span></h2>
       ${groups.length === 0
-        ? `<div class="empty"><div class="big">👥</div>Você ainda não participa de nenhum grupo.<br/>Crie um acima ou entre por um link de convite.</div>`
+        ? `<div class="empty"><div class="big">👥</div>${G.empty}</div>`
         : `<div class="people-grid">${groups.map(groupCard).join('')}</div>`}
     </div>`;
   $('#createGroup').onclick = async () => {
     const name = $('#groupName').value.trim();
-    if (!name) { toast('Dê um nome ao grupo.', true); return; }
+    if (!name) { toast(G.nameRequired, true); return; }
     try {
       const { group } = await api('/api/groups', { method: 'POST', body: { name } });
-      toast('Grupo criado! 👥');
+      toast(G.created);
       go('group', group.id);
     } catch (err) { toast(err.message, true); }
   };
@@ -623,73 +642,74 @@ function groupCard(g) {
     <div class="person" data-gid="${g.id}">
       <div class="avatar">${esc(initials(g.name))}</div>
       <h3>${esc(g.name)}</h3>
-      <div class="mini"><span class="g">👥 ${g.members} ${g.members === 1 ? 'membro' : 'membros'}</span>${g.owner ? '<span class="n">👑 dono</span>' : ''}</div>
+      <div class="mini"><span class="g">${esc(C.groups.cardMembers(g.members))}</span>${g.owner ? `<span class="n">${esc(C.groups.cardOwner)}</span>` : ''}</div>
     </div>`;
 }
 
 async function renderGroup(id) {
-  app.innerHTML = `<div class="empty">Carregando grupo…</div>`;
+  const GR = C.group;
+  app.innerHTML = `<div class="empty">${esc(GR.loading)}</div>`;
   const { group, members, matches, link } = await api('/api/groups/' + id);
   let groupUrl = link.url;
   app.innerHTML = `
-    <button class="backlink" id="backBtn">← Voltar para grupos</button>
+    <button class="backlink" id="backBtn">${esc(GR.back)}</button>
     <div class="card">
       <h2>${esc(group.name)}</h2>
-      <div class="sub">Convide gente pro grupo. Quem entrar vê os álbuns de todos e entra no cruzamento.</div>
+      <div class="sub">${esc(GR.inviteSub)}</div>
       <div class="row">
         <input id="groupUrl" readonly value="${esc(groupUrl)}" />
-        <button id="copyGroup" style="flex:none">Copiar link</button>
-        ${group.owner ? `<button id="rotateGroup" class="ghost" style="flex:none" title="Gera um link novo e invalida os antigos">🔄 Novo link</button>` : ''}
+        <button id="copyGroup" style="flex:none">${esc(GR.copyLink)}</button>
+        ${group.owner ? `<button id="rotateGroup" class="ghost" style="flex:none" title="${esc(GR.newLinkTitle)}">${esc(GR.newLink)}</button>` : ''}
       </div>
     </div>
     <div class="card">
-      <h2>Membros <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
+      <h2>${esc(GR.membersTitle)} <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
       <div class="people-grid">${members.map((u) => memberCard(u, group.owner)).join('')}</div>
       <div class="savebar" style="justify-content:flex-end;margin-top:14px">
         ${group.owner
-          ? `<button class="ghost danger" id="deleteGroup">Excluir grupo</button>`
-          : `<button class="ghost danger" id="leaveGroup">Sair do grupo</button>`}
+          ? `<button class="ghost danger" id="deleteGroup">${esc(GR.deleteBtn)}</button>`
+          : `<button class="ghost danger" id="leaveGroup">${esc(GR.leaveBtn)}</button>`}
       </div>
     </div>
     <div class="card">
-      <h2>Trocas no grupo 🔄</h2>
-      <div class="sub">Seu cruzamento com os outros membros. As perfeitas (mão dupla) primeiro.</div>
-      <div class="legend"><span><span class="dot give"></span>Você dá</span><span><span class="dot get"></span>Você recebe</span></div>
-      ${matches.length ? matches.map(matchCard).join('') : `<div class="empty">Nenhuma troca com os membros ainda.</div>`}
+      <h2>${esc(GR.matchesTitle)}</h2>
+      <div class="sub">${esc(GR.matchesSub)}</div>
+      <div class="legend"><span><span class="dot give"></span>${esc(GR.legendGive)}</span><span><span class="dot get"></span>${esc(GR.legendGet)}</span></div>
+      ${matches.length ? matches.map(matchCard).join('') : `<div class="empty">${esc(GR.matchesEmpty)}</div>`}
     </div>`;
   $('#backBtn').onclick = () => go('groups');
   $('#copyGroup').onclick = async () => {
     try { await navigator.clipboard.writeText(groupUrl); }
     catch { const i = $('#groupUrl'); i.select(); document.execCommand('copy'); }
-    toast('Link copiado! 📋');
+    toast(GR.linkCopied);
   };
   const rotateBtn = $('#rotateGroup');
   if (rotateBtn) rotateBtn.onclick = async () => {
-    if (!confirm('Gerar um link novo do grupo? Os links antigos deixam de funcionar.')) return;
+    if (!confirm(GR.confirmNewLink)) return;
     try {
       const r = await api('/api/groups/' + id + '/rotate', { method: 'POST' });
       groupUrl = r.url; $('#groupUrl').value = r.url;
-      toast('Novo link gerado! 🔄');
+      toast(GR.newLinkDone);
     } catch (err) { toast(err.message, true); }
   };
   const delBtn = $('#deleteGroup');
   if (delBtn) delBtn.onclick = async () => {
-    if (!confirm('Excluir o grupo? Isso remove todos os membros e não dá pra desfazer.')) return;
-    try { await api('/api/groups/' + id, { method: 'DELETE' }); toast('Grupo excluído.'); go('groups'); }
+    if (!confirm(GR.confirmDelete)) return;
+    try { await api('/api/groups/' + id, { method: 'DELETE' }); toast(GR.deleteDone); go('groups'); }
     catch (err) { toast(err.message, true); }
   };
   const leaveBtn = $('#leaveGroup');
   if (leaveBtn) leaveBtn.onclick = async () => {
-    if (!confirm('Sair deste grupo?')) return;
-    try { await api('/api/groups/' + id + '/leave', { method: 'POST' }); toast('Você saiu do grupo.'); go('groups'); }
+    if (!confirm(GR.confirmLeave)) return;
+    try { await api('/api/groups/' + id + '/leave', { method: 'POST' }); toast(GR.leaveDone); go('groups'); }
     catch (err) { toast(err.message, true); }
   };
   app.querySelectorAll('[data-remove-member]').forEach((btn) => (btn.onclick = async (e) => {
     e.stopPropagation();
-    if (!confirm('Remover este membro do grupo?')) return;
+    if (!confirm(GR.confirmRemoveMember)) return;
     try {
       await api('/api/groups/' + id + '/members/' + Number(btn.dataset.removeMember), { method: 'DELETE' });
-      toast('Membro removido.'); renderGroup(id);
+      toast(GR.removeMemberDone); renderGroup(id);
     } catch (err) { toast(err.message, true); }
   }));
   const openPerson = (pid) => { state.backView = ['group', id]; go('person', pid); };
@@ -704,14 +724,15 @@ async function renderGroup(id) {
 
 function memberCard(u, canRemove) {
   const me = u.id === state.user.id;
+  const GR = C.group;
   return `
     <div class="person" data-id="${u.id}">
-      ${canRemove && !u.owner && !me ? `<button class="card-x" data-remove-member="${u.id}" title="Remover do grupo" aria-label="Remover do grupo">✕</button>` : ''}
+      ${canRemove && !u.owner && !me ? `<button class="card-x" data-remove-member="${u.id}" title="${esc(GR.removeMemberTitle)}" aria-label="${esc(GR.removeMemberTitle)}">✕</button>` : ''}
       <div class="avatar">${esc(initials(u.name))}</div>
-      <h3>${esc(u.name)}${me ? ' (você)' : ''}${u.owner ? ' 👑' : ''}</h3>
+      <h3>${esc(u.name)}${me ? esc(GR.you) : ''}${u.owner ? esc(GR.ownerCrown) : ''}</h3>
       <div class="mini">
-        <span class="g">🔁 ${u.duplicates} repetidas</span>
-        <span class="n">🎯 ${u.missing} faltando</span>
+        <span class="g">${esc(GR.memberDuplicates(u.duplicates))}</span>
+        <span class="n">${esc(GR.memberMissing(u.missing))}</span>
       </div>
     </div>`;
 }
@@ -719,16 +740,18 @@ function memberCard(u, canRemove) {
 // ====== Perfil de outra pessoa ======
 async function renderPerson(id) {
   if (id === state.user.id) return go('profile');
-  app.innerHTML = `<div class="empty">Carregando perfil…</div>`;
+  const PE = C.person;
+  app.innerHTML = `<div class="empty">${esc(PE.loading)}</div>`;
   const [profile, matchData] = await Promise.all([
     api(`/api/users/${id}`),
     api(`/api/users/${id}/matches`),
   ]);
   const u = profile.user;
+  const first = u.name.split(' ')[0];
   const match = matchData.matches.find((m) => m.user.id === id);
 
   app.innerHTML = `
-    <button class="backlink" id="backBtn">← Voltar</button>
+    <button class="backlink" id="backBtn">${esc(PE.back)}</button>
     <div class="card">
       <div class="match-head" style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
         <div class="avatar" style="width:46px;height:46px;background:var(--accent);color:#09090b;display:grid;place-items:center;">${esc(initials(u.name))}</div>
@@ -737,18 +760,18 @@ async function renderPerson(id) {
           <div class="apt" style="color:var(--muted);font-size:13px">${esc(u.email || '')}</div>
         </div>
       </div>
-      ${match ? matchBox(match) : `<div class="sub" style="margin-top:12px">Vocês não têm trocas em comum no momento.</div>`}
+      ${match ? matchBox(match) : `<div class="sub" style="margin-top:12px">${esc(PE.noMatch)}</div>`}
     </div>
 
     <div class="card">
-      <h2>🔁 Repetidas de ${esc(u.name.split(' ')[0])} <span style="color:var(--muted);font-weight:400">(${profile.duplicates.length})</span></h2>
-      <div class="sub">Figurinhas que ${esc(u.name.split(' ')[0])} tem de sobra.</div>
+      <h2>${esc(PE.duplicatesTitle(first))} <span style="color:var(--muted);font-weight:400">(${profile.duplicates.length})</span></h2>
+      <div class="sub">${esc(PE.duplicatesSub(first))}</div>
       ${chipList(profile.duplicates, 'give', profile.missing)}
     </div>
 
     <div class="card">
-      <h2>🎯 Faltam para ${esc(u.name.split(' ')[0])} <span style="color:var(--muted);font-weight:400">(${profile.missing.length})</span></h2>
-      <div class="sub">Figurinhas que ${esc(u.name.split(' ')[0])} ainda precisa.</div>
+      <h2>${esc(PE.missingTitle(first))} <span style="color:var(--muted);font-weight:400">(${profile.missing.length})</span></h2>
+      <div class="sub">${esc(PE.missingSub(first))}</div>
       ${chipList(profile.missing, 'get')}
     </div>`;
 
@@ -758,14 +781,14 @@ async function renderPerson(id) {
 function matchBox(m) {
   return `
     <div class="match ${m.mutual ? 'mutual' : ''}" style="margin-top:12px">
-      ${m.mutual ? `<span class="tag perfect">🤝 ${m.mutual} troca${m.mutual > 1 ? 's' : ''} perfeita${m.mutual > 1 ? 's' : ''}</span>` : ''}
+      ${m.mutual ? `<span class="tag perfect">${esc(C.person.perfectTag(m.mutual))}</span>` : ''}
       <div class="block give">
-        <div class="label">Você dá (suas repetidas que faltam pra ele/ela) — ${m.youGive.length}</div>
-        ${m.youGive.length ? `<div class="chips">${m.youGive.map((s) => chip(s, 'give')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">nada por enquanto</span>`}
+        <div class="label">${esc(C.person.youGiveLabel(m.youGive.length))}</div>
+        ${m.youGive.length ? `<div class="chips">${m.youGive.map((s) => chip(s, 'give')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">${esc(C.person.nothingYet)}</span>`}
       </div>
       <div class="block get">
-        <div class="label">Você recebe (repetidas dele/dela que você precisa) — ${m.youGet.length}</div>
-        ${m.youGet.length ? `<div class="chips">${m.youGet.map((s) => chip(s, 'get')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">nada por enquanto</span>`}
+        <div class="label">${esc(C.person.youGetLabel(m.youGet.length))}</div>
+        ${m.youGet.length ? `<div class="chips">${m.youGet.map((s) => chip(s, 'get')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">${esc(C.person.nothingYet)}</span>`}
       </div>
     </div>`;
 }
@@ -774,35 +797,32 @@ function chip(s, kind = '') {
   return `<span class="chip ${kind}"><b>${s.code}</b></span>`;
 }
 function chipList(arr, kind, highlightAgainst) {
-  if (!arr.length) return `<div style="color:var(--muted);font-size:13px">Nenhuma cadastrada.</div>`;
+  if (!arr.length) return `<div style="color:var(--muted);font-size:13px">${esc(C.person.noneRegistered)}</div>`;
   return `<div class="chips">${arr.map((s) => chip(s, kind)).join('')}</div>`;
 }
 
 // ====== Trocas / cruzamentos (entre amigos) ======
 async function renderMatches() {
-  app.innerHTML = `<div class="empty">Procurando trocas…</div>`;
+  const MT = C.matches;
+  app.innerHTML = `<div class="empty">${esc(MT.loading)}</div>`;
   const { matches } = await api('/api/matches');
 
   if (!matches.length) {
     app.innerHTML = `
       <div class="card">
-        <h2>Suas trocas</h2>
-        <div class="empty"><div class="big">🤷</div>
-          Nenhuma troca encontrada ainda.<br/>
-          Marque o que falta e o que tem repetida em <b>Meu Álbum</b>,
-          e convide amigos em <b>Amigos</b>.</div>
+        <h2>${esc(MT.emptyTitle)}</h2>
+        <div class="empty"><div class="big">${MT.emptyIcon}</div>${MT.empty}</div>
       </div>`;
     return;
   }
 
   app.innerHTML = `
     <div class="card">
-      <h2>Suas trocas 🔄</h2>
-      <div class="sub">${matches.length} ${matches.length === 1 ? 'amigo combina' : 'amigos combinam'} com você.
-        As <b style="color:var(--accent)">trocas perfeitas</b> (mão dupla) aparecem primeiro.</div>
+      <h2>${esc(MT.title)}</h2>
+      <div class="sub">${MT.sub(matches.length)}</div>
       <div class="legend">
-        <span><span class="dot give"></span>Você dá</span>
-        <span><span class="dot get"></span>Você recebe</span>
+        <span><span class="dot give"></span>${esc(MT.legendGive)}</span>
+        <span><span class="dot get"></span>${esc(MT.legendGet)}</span>
       </div>
       ${matches.map(matchCard).join('')}
     </div>`;
@@ -822,18 +842,18 @@ function matchCard(m) {
       <div class="head">
         <div class="avatar" style="width:36px;height:36px;background:var(--accent);color:#09090b;display:grid;place-items:center;font-size:14px">${esc(initials(m.user.name))}</div>
         <h3 data-goperson="${m.user.id}" style="cursor:pointer">${esc(m.user.name)}</h3>
-        ${m.mutual ? `<span class="tag perfect">🤝 ${m.mutual} perfeita${m.mutual > 1 ? 's' : ''}</span>` : ''}
+        ${m.mutual ? `<span class="tag perfect">${esc(C.matches.perfectTag(m.mutual))}</span>` : ''}
       </div>
       <div class="block give">
-        <div class="label">Você dá — ${m.youGive.length}</div>
+        <div class="label">${esc(C.matches.youGive(m.youGive.length))}</div>
         ${m.youGive.length ? `<div class="chips">${m.youGive.map((s) => chip(s, 'give')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">—</span>`}
       </div>
       <div class="block get">
-        <div class="label">Você recebe — ${m.youGet.length}</div>
+        <div class="label">${esc(C.matches.youGet(m.youGet.length))}</div>
         ${m.youGet.length ? `<div class="chips">${m.youGet.map((s) => chip(s, 'get')).join('')}</div>` : `<span style="color:var(--muted);font-size:13px">—</span>`}
       </div>
       <div class="match-actions">
-        <button class="sec lb-open" type="button" data-trade="${m.user.id}">✅ Marquei a troca</button>
+        <button class="sec lb-open" type="button" data-trade="${m.user.id}">${esc(C.matches.markTrade)}</button>
       </div>
     </div>`;
 }
@@ -848,21 +868,22 @@ async function openTradeModal(friendId) {
   if (!m) return;
   const wrap = document.createElement('div');
   wrap.className = 'lightbox';
+  const T = C.trade;
   wrap.innerHTML = `
     <div class="lb-card">
-      <h2>Marcar troca com ${esc(m.user.name.split(' ')[0])}</h2>
-      <div class="sub">Selecione o que saiu do seu álbum nesta troca. Ao confirmar, removemos esses status.</div>
+      <h2>${esc(T.title(m.user.name.split(' ')[0]))}</h2>
+      <div class="sub">${esc(T.sub)}</div>
       <div class="lb-group">
-        <div class="lb-head"><span>🎯 Faltantes que você recebeu</span><button class="link" type="button" data-all="get">Selecionar todas</button></div>
-        <div class="lb-chips" data-group="get">${m.youGet.length ? m.youGet.map((s) => tradeChk(s, 'get')).join('') : '<span class="muted">nada aqui</span>'}</div>
+        <div class="lb-head"><span>${esc(T.gotHead)}</span><button class="link" type="button" data-all="get">${esc(T.selectAll)}</button></div>
+        <div class="lb-chips" data-group="get">${m.youGet.length ? m.youGet.map((s) => tradeChk(s, 'get')).join('') : `<span class="muted">${esc(T.nothingHere)}</span>`}</div>
       </div>
       <div class="lb-group">
-        <div class="lb-head"><span>🔁 Repetidas que você deu</span><button class="link" type="button" data-all="give">Selecionar todas</button></div>
-        <div class="lb-chips" data-group="give">${m.youGive.length ? m.youGive.map((s) => tradeChk(s, 'give')).join('') : '<span class="muted">nada aqui</span>'}</div>
+        <div class="lb-head"><span>${esc(T.gaveHead)}</span><button class="link" type="button" data-all="give">${esc(T.selectAll)}</button></div>
+        <div class="lb-chips" data-group="give">${m.youGive.length ? m.youGive.map((s) => tradeChk(s, 'give')).join('') : `<span class="muted">${esc(T.nothingHere)}</span>`}</div>
       </div>
       <div class="lb-actions">
-        <button class="ghost" type="button" id="lbCancel">Cancelar</button>
-        <button type="button" id="lbConfirm">Confirmar troca</button>
+        <button class="ghost" type="button" id="lbCancel">${esc(T.cancel)}</button>
+        <button type="button" id="lbConfirm">${esc(T.confirm)}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -880,14 +901,14 @@ async function openTradeModal(friendId) {
     const checked = (g) => [...wrap.querySelectorAll(`.lb-chips[data-group="${g}"] input:checked`)].map((b) => b.value);
     const rmMiss = new Set(checked('get'));
     const rmDup = new Set(checked('give'));
-    if (!rmMiss.size && !rmDup.size) { toast('Selecione ao menos uma figurinha.', true); return; }
+    if (!rmMiss.size && !rmDup.size) { toast(T.selectAtLeastOne, true); return; }
     try {
       const data = await api(`/api/users/${state.user.id}`);
       const missing = data.missing.map((s) => s.code).filter((c) => !rmMiss.has(c));
       const duplicates = data.duplicates.map((s) => s.code).filter((c) => !rmDup.has(c));
       await api(`/api/users/${state.user.id}/stickers`, { method: 'PUT', body: { missing, duplicates } });
       close();
-      toast('Troca registrada! ✅');
+      toast(T.done);
       if (state.afterTrade) state.afterTrade();
     } catch (err) { toast(err.message, true); }
   };
@@ -900,10 +921,10 @@ async function processInvite() {
   history.replaceState(null, '', location.pathname); // limpa a URL
   try {
     const info = await api('/api/friends/invite/' + encodeURIComponent(token));
-    if (info.isSelf) { toast('Esse é o seu próprio link de convite. 🙂'); return; }
-    if (!confirm(`Aceitar amizade com ${info.inviter.name}? Os álbuns de vocês ficarão visíveis um para o outro e o app vai cruzar as figurinhas.`)) return;
+    if (info.isSelf) { toast(C.invites.friendSelf); return; }
+    if (!confirm(C.invites.friendConfirm(info.inviter.name))) return;
     await api('/api/friends/accept', { method: 'POST', body: { token } });
-    toast('Agora vocês são amigos! 🤝');
+    toast(C.invites.friendDone);
     go('friends');
   } catch (err) {
     toast(err.message, true);
@@ -917,10 +938,10 @@ async function processGroupInvite() {
   history.replaceState(null, '', location.pathname);
   try {
     const info = await api('/api/groups/invite/' + encodeURIComponent(token));
-    if (info.isMember) { toast('Você já participa desse grupo.'); go('group', info.group.id); return; }
-    if (!confirm(`Entrar no grupo "${info.group.name}"? Todos os membros verão o álbum uns dos outros e o app vai cruzar as figurinhas entre todos.`)) return;
+    if (info.isMember) { toast(C.invites.groupAlready); go('group', info.group.id); return; }
+    if (!confirm(C.invites.groupConfirm(info.group.name))) return;
     const { group } = await api('/api/groups/join', { method: 'POST', body: { token } });
-    toast('Você entrou no grupo! 👥');
+    toast(C.invites.groupDone);
     go('group', group.id);
   } catch (err) {
     toast(err.message, true);
@@ -938,7 +959,7 @@ async function boot() {
 }
 
 async function logout() {
-  if (state.dirty && !confirm('Há alterações não salvas. Sair mesmo assim?')) return;
+  if (state.dirty && !confirm(C.common.logoutUnsaved)) return;
   try { await api('/api/logout', { method: 'POST' }); } catch (e) { /* ok */ }
   state.user = null;
   state.dirty = false;
@@ -949,21 +970,22 @@ async function logout() {
 function openBugReport() {
   const wrap = document.createElement('div');
   wrap.className = 'lightbox';
+  const B = C.bug;
   wrap.innerHTML = `
     <div class="lb-card">
-      <h2>Reportar bug</h2>
-      <div class="sub">Conta o que aconteceu. Ao enviar, abre seu app de e-mail com a mensagem pronta pra <b>fernando drudi</b>.</div>
+      <h2>${esc(B.title)}</h2>
+      <div class="sub">${B.sub}</div>
       <div class="field">
-        <label>Seu e-mail (opcional)</label>
-        <input id="bugEmail" type="email" placeholder="voce@email.com" />
+        <label>${esc(B.emailLabel)}</label>
+        <input id="bugEmail" type="email" placeholder="${esc(B.emailPlaceholder)}" />
       </div>
       <div class="field">
-        <label>O que rolou?</label>
-        <textarea id="bugMsg" placeholder="Descreva o bug, em qual tela, o que esperava…"></textarea>
+        <label>${esc(B.msgLabel)}</label>
+        <textarea id="bugMsg" placeholder="${esc(B.msgPlaceholder)}"></textarea>
       </div>
       <div class="lb-actions">
-        <button class="ghost" type="button" id="bugCancel">Cancelar</button>
-        <button type="button" id="bugSend">Enviar</button>
+        <button class="ghost" type="button" id="bugCancel">${esc(B.cancel)}</button>
+        <button type="button" id="bugSend">${esc(B.send)}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
@@ -973,17 +995,18 @@ function openBugReport() {
   wrap.querySelector('#bugSend').onclick = () => {
     const msg = wrap.querySelector('#bugMsg').value.trim();
     const from = wrap.querySelector('#bugEmail').value.trim();
-    if (!msg) { toast('Descreva o bug.', true); return; }
-    const subject = encodeURIComponent('Bug report — Completa Aí');
+    if (!msg) { toast(B.needMsg, true); return; }
+    const subject = encodeURIComponent(B.emailSubject);
     const body = encodeURIComponent(`${msg}\n\n---\nDe: ${from || '(não informado)'}\nUsuário: ${state.user ? state.user.name + ' (id ' + state.user.id + ')' : 'deslogado'}\nPágina: ${location.href}\nNavegador: ${navigator.userAgent}`);
-    window.location.href = `mailto:f.drudi@gmail.com?subject=${subject}&body=${body}`;
+    window.location.href = `mailto:${B.to}?subject=${subject}&body=${body}`;
     close();
-    toast('Abrindo seu e-mail… 📧');
+    toast(B.opening);
   };
 }
 
 async function init() {
   window._go = go; // usado por onclick inline
+  applyMeta();     // título da aba, cabeçalho, nav e crédito vindos de content.js
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('.report-bugs');
     if (b) { e.preventDefault(); openBugReport(); }
