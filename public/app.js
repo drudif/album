@@ -77,7 +77,7 @@ async function renderAuth() {
     <div class="auth-grid">
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
-      <h1 class="glitch" data-text="COMPLETA AÍ">COM<br/>PLETA<br/>AÍ</h1>
+      <h1 class="glitch" data-text="Completa Aí">Com<br/>pleta<br/>Aí</h1>
       <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos.
          O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
       <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
