@@ -2,8 +2,8 @@
   /* Neo-Brutalist 'Acid' */
   --bg: #f8f4e8;            /* papel */
   --ink: #09090b;          /* tinta / bordas */
-  --acid: #d2e823;         /* acento acido */
-  --on-acid: #0c0c0a;      /* texto sobre fundo acido (fixo nos 2 temas) */
+  --acid: #2dd4bf;         /* acento teal */
+  --on-acid: #0c1512;      /* texto sobre o acento (escuro) */
 
   --panel: #ffffff;
   --panel-2: #efeadd;
@@ -14,19 +14,19 @@
   --muted: #5c5c52;
   --faint: #8a8576;
 
-  --accent: #d2e823;
-  --accent-soft: #eef6a8;
+  --accent: #2dd4bf;
+  --accent-soft: #d5f7f1;
   --gold: #09090b;
   /* textos inline (app.js) legiveis: tinta. Os estados usam preenchimento. */
   --get: #09090b;          /* falta (quero) */
   --give: #09090b;         /* repetida (tenho) */
   --give-soft: #f0ecd9;
-  --get-soft: #eef6a8;
+  --get-soft: #d9f6f1;
 
   --radius: 12px;
   --radius-sm: 8px;
   --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --display: 'Dela Gothic One', 'Space Grotesk', sans-serif;
+  --display: 'Bricolage Grotesque', 'Space Grotesk', sans-serif;
   --shadow: 4px 4px 0 0 var(--ink);
   --shadow-sm: 2px 2px 0 0 var(--ink);
   --shadow-lg: 8px 8px 0 0 var(--ink);
@@ -59,11 +59,10 @@ body::after {
 }
 body.logged-in .cursor { display: none !important; }
 
-h1, h2, h3 { font-family: var(--display); font-weight: 400; letter-spacing: -0.03em; }
+h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; }
 
-/* ---------- glitch ---------- */
+/* ---------- glitch (desativado no hover) ---------- */
 .glitch { position: relative; }
-.glitch:hover { animation: glitch .3s infinite; }
 @keyframes glitch {
   0% { transform: translate(0, 0); }
   20% { transform: translate(-2px, 2px); }
@@ -109,7 +108,7 @@ input:focus { outline: none; box-shadow: var(--shadow); transform: translate(-1p
 /* ---------- topbar (nav fixa brutalista) ---------- */
 .topbar {
   position: sticky; top: 16px; z-index: 50;
-  margin: 16px; padding: 12px 18px;
+  max-width: 1100px; margin: 16px auto; padding: 12px 22px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
   background: color-mix(in srgb, var(--bg) 90%, transparent);
   -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
@@ -121,7 +120,7 @@ input:focus { outline: none; box-shadow: var(--shadow); transform: translate(-1p
   background: var(--acid); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--shadow-sm);
 }
 .brand-txt { display: flex; flex-direction: column; gap: 2px; }
-.brand strong { font-family: var(--display); font-size: 20px; line-height: 1; letter-spacing: -0.04em; text-transform: uppercase; }
+.brand strong { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; }
 .credit { font-size: 10.5px; color: var(--muted); letter-spacing: .02em; }
 .credit a { color: var(--ink); font-weight: 700; text-decoration: none; box-shadow: inset 0 -0.5em 0 var(--acid); padding: 0 2px; }
 .credit a:hover { background: var(--acid); }
@@ -174,9 +173,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 /* ---------- hero / login ---------- */
 .hero { text-align: left; padding: 30px 0 24px; max-width: 980px; }
 .hero h1 {
-  font-family: var(--display); text-transform: uppercase;
-  font-size: clamp(54px, 11vw, 116px); line-height: 0.85; margin: 14px 0 18px;
-  letter-spacing: -0.04em;
+  font-family: var(--display); font-weight: 800;
+  font-size: clamp(54px, 11vw, 116px); line-height: 0.9; margin: 14px 0 18px;
+  letter-spacing: -0.03em;
 }
 .hero p { color: var(--ink); max-width: 56ch; font-size: 16px; margin: 0; font-weight: 500; }
 .hero .credit { display: inline-block; margin-top: 14px; font-size: 12px; }
@@ -206,7 +205,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
   background: var(--bg); border: 2px solid var(--ink); border-radius: var(--radius-sm);
   padding: 12px 18px; min-width: 104px; box-shadow: var(--shadow-sm);
 }
-.stat b { font-family: var(--font); font-weight: 400; font-size: 30px; display: block; line-height: 1; letter-spacing: -0.02em; }
+.stat b { font-family: var(--display); font-weight: 500; font-size: 32px; display: block; line-height: 1; letter-spacing: -0.02em; }
 .stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
 
 /* ---------- editor ---------- */
@@ -252,7 +251,7 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .sticker:hover { transform: translate(2px, 2px); box-shadow: 0 0 0 0 var(--ink); }
 .sticker .slot-num { display: flex; flex-direction: column; line-height: .95; min-width: 30px; }
 .sticker .slot-num i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-.sticker .slot-num b { font-family: var(--font); font-weight: 400; font-size: 21px; color: var(--ink); letter-spacing: -0.01em; }
+.sticker .slot-num b { font-family: var(--display); font-weight: 500; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
 .sticker .slot-ph {
   position: relative; height: 42px; background: var(--bg);
   border: 2px solid var(--ink); border-radius: 6px;
@@ -389,8 +388,13 @@ button.ghost:hover, button.sec:hover, .gbtn:hover,
 /* ---------- home em 2 colunas ---------- */
 .auth-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(28px, 5vw, 64px); align-items: start; }
 .auth-grid > * { min-width: 0; } /* impede que o marquee (nowrap) infle a coluna */
-.auth-grid .hero { max-width: none; padding-top: 18px; }
-.auth-grid .hero h1 { font-size: clamp(52px, 9vw, 108px); }
+.auth-grid .hero {
+  max-width: none; padding-top: 8px;
+  display: flex; flex-direction: column; align-items: flex-start;
+  gap: clamp(22px, 3vw, 40px); /* respiro entre os conjuntos */
+}
+.auth-grid .hero h1 { font-size: clamp(62px, 13vw, 152px); margin: 0; line-height: 0.9; }
+.auth-grid .hero p, .auth-grid .hero .credit, .auth-grid .hero .marquee { margin: 0; }
 .auth-card { width: 100%; max-width: 480px; }
 @media (max-width: 880px) {
   .auth-grid { grid-template-columns: 1fr; gap: 14px; }
