@@ -75,10 +75,10 @@ async function renderAuth() {
   app.innerHTML = `
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
-      <h1 class="glitch" data-text="ÁLBUM DA COPA">ÁLBUM<br/>DA COPA</h1>
-      <p>Monte seu álbum, convide amigos e cruze quem tem o que falta pra você.
-         Crie sua conta para começar — é de graça.</p>
-      <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a></div>
+      <h1 class="glitch" data-text="COMPLETA AÍ">COMPLETA<br/>AÍ</h1>
+      <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos.
+         O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
+      <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
       <div class="marquee" aria-hidden="true"><div>
         <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
         <span>Bora completar o álbum</span><span>993 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
@@ -862,8 +862,68 @@ async function logout() {
   renderAuth();
 }
 
+// ====== Tema (claro/escuro) ======
+function applyTheme(t) {
+  document.documentElement.dataset.theme = t;
+  const b = $('#themeToggle');
+  if (b) b.textContent = t === 'dark' ? '☀️' : '🌙';
+}
+function initTheme() {
+  const saved = localStorage.getItem('theme') ||
+    (window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  applyTheme(saved);
+  const b = $('#themeToggle');
+  if (b) b.onclick = () => {
+    const nt = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    localStorage.setItem('theme', nt);
+    applyTheme(nt);
+  };
+}
+
+// ====== Reportar bug (lightbox -> e-mail) ======
+function openBugReport() {
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <div class="lb-card">
+      <h2>Reportar bug</h2>
+      <div class="sub">Conta o que aconteceu. Ao enviar, abre seu app de e-mail com a mensagem pronta pra <b>fernando drudi</b>.</div>
+      <div class="field">
+        <label>Seu e-mail (opcional)</label>
+        <input id="bugEmail" type="email" placeholder="voce@email.com" />
+      </div>
+      <div class="field">
+        <label>O que rolou?</label>
+        <textarea id="bugMsg" placeholder="Descreva o bug, em qual tela, o que esperava…"></textarea>
+      </div>
+      <div class="lb-actions">
+        <button class="ghost" type="button" id="bugCancel">Cancelar</button>
+        <button type="button" id="bugSend">Enviar</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  wrap.querySelector('#bugCancel').onclick = close;
+  wrap.querySelector('#bugSend').onclick = () => {
+    const msg = wrap.querySelector('#bugMsg').value.trim();
+    const from = wrap.querySelector('#bugEmail').value.trim();
+    if (!msg) { toast('Descreva o bug.', true); return; }
+    const subject = encodeURIComponent('Bug report — Completa Aí');
+    const body = encodeURIComponent(`${msg}\n\n---\nDe: ${from || '(não informado)'}\nUsuário: ${state.user ? state.user.name + ' (id ' + state.user.id + ')' : 'deslogado'}\nPágina: ${location.href}\nNavegador: ${navigator.userAgent}`);
+    window.location.href = `mailto:f.drudi@gmail.com?subject=${subject}&body=${body}`;
+    close();
+    toast('Abrindo seu e-mail… 📧');
+  };
+}
+
 async function init() {
   window._go = go; // usado por onclick inline
+  initTheme();
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest && e.target.closest('.report-bugs');
+    if (b) { e.preventDefault(); openBugReport(); }
+  });
   document.querySelectorAll('#nav button[data-view]').forEach((b) => {
     b.onclick = () => go(b.dataset.view);
   });

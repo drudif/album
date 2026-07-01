@@ -100,6 +100,12 @@ async function getUserStickers(userId) {
 function decorate(codes) {
   return codes.map((c) => catalog.byCode.get(c)).filter(Boolean).sort((a, b) => a.code.localeCompare(b.code));
 }
+// Origem canonica para links de convite (usa PUBLIC_ORIGIN se definido).
+function publicOrigin(req) {
+  if (process.env.PUBLIC_ORIGIN) return process.env.PUBLIC_ORIGIN.replace(/\/+$/, '');
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
+  return `${proto}://${req.get('host')}`;
+}
 
 // ---------- amizades ----------
 async function getFriendIds(uid) {
@@ -326,8 +332,7 @@ app.get('/api/friends/link', requireAuth, h(async (req, res) => {
     token = crypto.randomBytes(12).toString('base64url');
     await query('UPDATE users SET invite_token = $1 WHERE id = $2', [token, req.user.id]);
   }
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
-  const url = `${proto}://${req.get('host')}/?convite=${token}`;
+  const url = `${publicOrigin(req)}/?convite=${token}`;
   res.json({ token, url });
 }));
 
@@ -409,10 +414,7 @@ app.get('/api/groups', requireAuth, h(async (req, res) => {
   res.json({ groups: list.map((g) => ({ id: g.id, name: g.name, owner: g.owner_id === req.user.id, members: Number(g.members) })) });
 }));
 
-const groupUrl = (req, token) => {
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
-  return `${proto}://${req.get('host')}/?grupo=${token}`;
-};
+const groupUrl = (req, token) => `${publicOrigin(req)}/?grupo=${token}`;
 
 // Detalhe do grupo: membros (com contagens), cruzamento entre mim e os demais,
 // e o link de convite. Todos os membros veem tudo.
