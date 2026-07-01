@@ -178,10 +178,9 @@ app.get('/api/config', (req, res) => {
 });
 
 // ---------- login com Google (OAuth) ----------
-const googleRedirect = (req) => {
-  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'http').split(',')[0];
-  return `${proto}://${req.get('host')}/api/auth/google/callback`;
-};
+// Usa a origem canonica (PUBLIC_ORIGIN) para o redirect ficar sempre no
+// dominio publico, mesmo se a Cloudflare reescrever o Host para o Railway.
+const googleRedirect = (req) => `${publicOrigin(req)}/api/auth/google/callback`;
 
 app.get('/api/auth/google', (req, res) => {
   if (!googleEnabled()) return res.status(404).send('Login com Google não configurado.');
