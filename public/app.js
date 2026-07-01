@@ -77,7 +77,7 @@ async function renderAuth() {
     <div class="auth-grid">
     <div class="hero">
       <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
-      <h1 class="glitch" data-text="Completa Aí">Com<br/>pleta<br/>Aí</h1>
+      <h1 class="glitch" data-text="Completaí">Com-<br/>pletaí</h1>
       <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos.
          O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
       <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
@@ -262,7 +262,7 @@ function renderSections(filter) {
     for (const s of sec.stickers) if (state.edit.has(s.code)) selCount++;
 
     // Reproducao da pagina do album: spread de duas paginas (4 colunas cada),
-    // com posicoes fixas por numero — escudo(01)/elenco(02) no topo, etc.
+    // com posicoes fixas por numero — escudo(01) no topo, elenco(13) etc.
     // [linha, coluna] dentro de cada pagina (esquerda 1-10, direita 11-20).
     const numOf = (code) => { const m = /(\d+)$/.exec(code); return m ? Number(m[1]) : 0; };
     const POS = {
@@ -304,19 +304,44 @@ function renderSections(filter) {
   });
 }
 
+// Icones minimalistas (mesmo estilo de traco do app) por tipo de figurinha.
+const STICKER_ICONS = {
+  bust: '<circle cx="12" cy="8.2" r="3.4"/><path d="M5.5 19c0-3.7 2.9-6.2 6.5-6.2s6.5 2.5 6.5 6.2"/>',
+  group:
+    '<circle cx="8" cy="8.6" r="2.4"/><circle cx="16" cy="8.6" r="2.4"/><path d="M3.4 17.6c0-2.7 2-4.4 4.6-4.4 1 0 1.9.25 2.6.7"/><path d="M13.4 18.6c.2-3 2.4-5 4.6-5s4 1.7 4.6 4.6"/>',
+  crest:
+    '<path d="M12 3.2l7 2.1v5.2c0 4.5-3 7.8-7 9.5-4-1.7-7-5-7-9.5V5.3l7-2.1z"/><path d="M9 11l2 2 4-4"/>',
+  star: '<path d="M12 3.4l2.5 5.3 5.8.8-4.2 4 1 5.8L12 16.6l-5.1 2.7 1-5.8-4.2-4 5.8-.8L12 3.4z"/>',
+};
+function stickerIcon(s, num) {
+  let type = 'bust';
+  let shine = false;
+  if (s.sectionId === 'FWC') { type = 'star'; shine = true; }
+  else if (s.sectionId === 'CC') { type = 'bust'; }
+  else if (s.team) {
+    if (num === 1) { type = 'crest'; shine = true; }
+    else if (num === 13) { type = 'group'; }
+    else { type = 'bust'; }
+  }
+  const svg = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STICKER_ICONS[type]}</svg>`;
+  return { svg, shine };
+}
+
 function stickerRow(s, pos) {
   const status = state.edit.get(s.code);
   const cls = status === 'missing' ? 'is-miss' : status === 'duplicate' ? 'is-dup' : '';
   // Quebra o codigo em prefixo + numero (ex.: BRA07 -> BRA / 7), estilo album.
   const m = /^([A-Za-z]+)(\d+)$/.exec(s.code);
   const prefix = m ? m[1] : s.code;
-  const num = m ? String(Number(m[2])) : '';
+  const numN = m ? Number(m[2]) : 0;
+  const num = m ? String(numN) : '';
+  const ic = stickerIcon(s, numN);
   // Posicao fixa na pagina do album (linha/coluna), quando fornecida.
   const style = pos ? ` style="grid-row:${pos.r};grid-column:${pos.c}"` : '';
   return `
     <div class="sticker ${cls}" data-code="${s.code}"${style}>
       <span class="slot-num"><i>${prefix}</i><b>${num}</b></span>
-      <span class="slot-ph" aria-hidden="true"></span>
+      <span class="slot-ph${ic.shine ? ' shine' : ''}" aria-hidden="true">${ic.svg}</span>
       <span class="toggles">
         <button class="miss ${status === 'missing' ? 'on' : ''}" data-code="${s.code}" data-kind="missing" title="Falta">Falta</button>
         <button class="dup ${status === 'duplicate' ? 'on' : ''}" data-code="${s.code}" data-kind="duplicate" title="Repetida">Rep.</button>
@@ -504,6 +529,7 @@ async function renderFriends() {
     api('/api/friends/link').catch(() => ({ url: '' })),
     api('/api/friends'),
   ]);
+  let inviteUrl = link.url;
   const friends = data.friends;
   app.innerHTML = `
     <div class="card">
@@ -511,8 +537,9 @@ async function renderFriends() {
       <div class="sub">Mande seu link. Quando a pessoa <b>aceitar</b>, os álbuns de vocês
         ficam visíveis e o app cruza o que falta com o que sobra.</div>
       <div class="row">
-        <input id="inviteUrl" readonly value="${esc(link.url)}" />
+        <input id="inviteUrl" readonly value="${esc(inviteUrl)}" />
         <button id="copyInvite" style="flex:none">Copiar link</button>
+        <button id="rotateInvite" class="ghost" style="flex:none" title="Gera um link novo e invalida os antigos">🔄 Novo link</button>
       </div>
     </div>
     <div class="card">
@@ -522,10 +549,24 @@ async function renderFriends() {
         : `<div class="people-grid">${friends.map(personCard).join('')}</div>`}
     </div>`;
   $('#copyInvite').onclick = async () => {
-    try { await navigator.clipboard.writeText(link.url); }
+    try { await navigator.clipboard.writeText(inviteUrl); }
     catch { const i = $('#inviteUrl'); i.select(); document.execCommand('copy'); }
     toast('Link copiado! 📋');
   };
+  $('#rotateInvite').onclick = async () => {
+    if (!confirm('Gerar um link novo? Os links antigos deixam de funcionar.')) return;
+    try {
+      const r = await api('/api/friends/link/rotate', { method: 'POST' });
+      inviteUrl = r.url; $('#inviteUrl').value = r.url;
+      toast('Novo link gerado! 🔄');
+    } catch (err) { toast(err.message, true); }
+  };
+  app.querySelectorAll('[data-unfriend]').forEach((btn) => (btn.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm('Desfazer amizade? Vocês deixam de ver o álbum um do outro.')) return;
+    try { await api('/api/friends/' + Number(btn.dataset.unfriend), { method: 'DELETE' }); toast('Amizade desfeita.'); renderFriends(); }
+    catch (err) { toast(err.message, true); }
+  }));
   app.querySelectorAll('.person').forEach((el) => (el.onclick = () => {
     state.backView = ['friends'];
     go('person', Number(el.dataset.id));
@@ -535,6 +576,7 @@ async function renderFriends() {
 function personCard(u) {
   return `
     <div class="person" data-id="${u.id}">
+      <button class="card-x" data-unfriend="${u.id}" title="Desfazer amizade" aria-label="Desfazer amizade">✕</button>
       <div class="avatar">${esc(initials(u.name))}</div>
       <h3>${esc(u.name)}</h3>
       <div class="mini">
@@ -588,19 +630,26 @@ function groupCard(g) {
 async function renderGroup(id) {
   app.innerHTML = `<div class="empty">Carregando grupo…</div>`;
   const { group, members, matches, link } = await api('/api/groups/' + id);
+  let groupUrl = link.url;
   app.innerHTML = `
     <button class="backlink" id="backBtn">← Voltar para grupos</button>
     <div class="card">
       <h2>${esc(group.name)}</h2>
       <div class="sub">Convide gente pro grupo. Quem entrar vê os álbuns de todos e entra no cruzamento.</div>
       <div class="row">
-        <input id="groupUrl" readonly value="${esc(link.url)}" />
+        <input id="groupUrl" readonly value="${esc(groupUrl)}" />
         <button id="copyGroup" style="flex:none">Copiar link</button>
+        ${group.owner ? `<button id="rotateGroup" class="ghost" style="flex:none" title="Gera um link novo e invalida os antigos">🔄 Novo link</button>` : ''}
       </div>
     </div>
     <div class="card">
       <h2>Membros <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
-      <div class="people-grid">${members.map(memberCard).join('')}</div>
+      <div class="people-grid">${members.map((u) => memberCard(u, group.owner)).join('')}</div>
+      <div class="savebar" style="justify-content:flex-end;margin-top:14px">
+        ${group.owner
+          ? `<button class="ghost danger" id="deleteGroup">Excluir grupo</button>`
+          : `<button class="ghost danger" id="leaveGroup">Sair do grupo</button>`}
+      </div>
     </div>
     <div class="card">
       <h2>Trocas no grupo 🔄</h2>
@@ -610,10 +659,39 @@ async function renderGroup(id) {
     </div>`;
   $('#backBtn').onclick = () => go('groups');
   $('#copyGroup').onclick = async () => {
-    try { await navigator.clipboard.writeText(link.url); }
+    try { await navigator.clipboard.writeText(groupUrl); }
     catch { const i = $('#groupUrl'); i.select(); document.execCommand('copy'); }
     toast('Link copiado! 📋');
   };
+  const rotateBtn = $('#rotateGroup');
+  if (rotateBtn) rotateBtn.onclick = async () => {
+    if (!confirm('Gerar um link novo do grupo? Os links antigos deixam de funcionar.')) return;
+    try {
+      const r = await api('/api/groups/' + id + '/rotate', { method: 'POST' });
+      groupUrl = r.url; $('#groupUrl').value = r.url;
+      toast('Novo link gerado! 🔄');
+    } catch (err) { toast(err.message, true); }
+  };
+  const delBtn = $('#deleteGroup');
+  if (delBtn) delBtn.onclick = async () => {
+    if (!confirm('Excluir o grupo? Isso remove todos os membros e não dá pra desfazer.')) return;
+    try { await api('/api/groups/' + id, { method: 'DELETE' }); toast('Grupo excluído.'); go('groups'); }
+    catch (err) { toast(err.message, true); }
+  };
+  const leaveBtn = $('#leaveGroup');
+  if (leaveBtn) leaveBtn.onclick = async () => {
+    if (!confirm('Sair deste grupo?')) return;
+    try { await api('/api/groups/' + id + '/leave', { method: 'POST' }); toast('Você saiu do grupo.'); go('groups'); }
+    catch (err) { toast(err.message, true); }
+  };
+  app.querySelectorAll('[data-remove-member]').forEach((btn) => (btn.onclick = async (e) => {
+    e.stopPropagation();
+    if (!confirm('Remover este membro do grupo?')) return;
+    try {
+      await api('/api/groups/' + id + '/members/' + Number(btn.dataset.removeMember), { method: 'DELETE' });
+      toast('Membro removido.'); renderGroup(id);
+    } catch (err) { toast(err.message, true); }
+  }));
   const openPerson = (pid) => { state.backView = ['group', id]; go('person', pid); };
   app.querySelectorAll('.person[data-id]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.id))));
   app.querySelectorAll('[data-goperson]').forEach((el) => (el.onclick = () => openPerson(Number(el.dataset.goperson))));
@@ -624,10 +702,11 @@ async function renderGroup(id) {
   });
 }
 
-function memberCard(u) {
+function memberCard(u, canRemove) {
   const me = u.id === state.user.id;
   return `
     <div class="person" data-id="${u.id}">
+      ${canRemove && !u.owner && !me ? `<button class="card-x" data-remove-member="${u.id}" title="Remover do grupo" aria-label="Remover do grupo">✕</button>` : ''}
       <div class="avatar">${esc(initials(u.name))}</div>
       <h3>${esc(u.name)}${me ? ' (você)' : ''}${u.owner ? ' 👑' : ''}</h3>
       <div class="mini">

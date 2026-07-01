@@ -131,14 +131,14 @@ export function buildCatalog() {
   const specialStickers = SPECIALS.map((label, i) => ({
     code: `FWC${pad(i + 1)}`,
     label,
-    section: 'Abertura e Especiais',
+    section: 'FWC',
     sectionId: 'FWC',
     team: null,
   }));
   stickers.push(...specialStickers);
   sections.push({
     id: 'FWC',
-    title: 'Abertura e Especiais',
+    title: 'FWC',
     flag: '⭐',
     group: null,
     stickers: specialStickers,
@@ -161,32 +161,27 @@ export function buildCatalog() {
     stickers: cocaStickers,
   });
 
-  // Secoes por selecao (01 escudo, 02 elenco, 03..20 jogadores), por grupo
+  // Secoes por selecao. Layout do album: 01 = escudo, 13 = elenco (foto do
+  // time), demais numeros = jogadores. Os codigos vao de 01 a 20.
   for (const team of TEAMS) {
     const teamStickers = [];
-    teamStickers.push({
-      code: `${team.code}01`,
-      label: `${team.name} - Escudo`,
-      section: team.name,
-      sectionId: team.code,
-      team: team.code,
-    });
-    teamStickers.push({
-      code: `${team.code}02`,
-      label: `${team.name} - Elenco`,
-      section: team.name,
-      sectionId: team.code,
-      team: team.code,
-    });
-    for (let p = 1; p <= PLAYERS_PER_TEAM; p++) {
+    const add = (n, label) =>
       teamStickers.push({
-        code: `${team.code}${pad(p + 2)}`,
-        label: `${team.name} - Jogador ${p}`,
+        code: `${team.code}${pad(n)}`,
+        label: `${team.name} - ${label}`,
         section: team.name,
         sectionId: team.code,
         team: team.code,
       });
+    add(1, 'Escudo');
+    add(13, 'Elenco');
+    let player = 0;
+    for (let n = 2; n <= PLAYERS_PER_TEAM + 2; n++) {
+      if (n === 13) continue; // reservado para o elenco
+      player += 1;
+      add(n, `Jogador ${player}`);
     }
+    teamStickers.sort((a, b) => a.code.localeCompare(b.code));
     stickers.push(...teamStickers);
     sections.push({
       id: team.code,

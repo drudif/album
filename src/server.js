@@ -464,6 +464,64 @@ app.post('/api/groups/join', requireAuth, h(async (req, res) => {
   res.json({ group: { id: g.id, name: g.name } });
 }));
 
+// ---------- gestao de amizades e grupos (revogar / sair / remover) ----------
+
+// Gera um novo link de convite de amizade (invalida os antigos).
+app.post('/api/friends/link/rotate', requireAuth, h(async (req, res) => {
+  const token = crypto.randomBytes(12).toString('base64url');
+  await query('UPDATE users SET invite_token = $1 WHERE id = $2', [token, req.user.id]);
+  res.json({ token, url: `${publicOrigin(req)}/?convite=${token}` });
+}));
+
+// Desfazer amizade.
+app.delete('/api/friends/:id', requireAuth, h(async (req, res) => {
+  const id = Number(req.params.id);
+  const [x, y] = req.user.id < id ? [req.user.id, id] : [id, req.user.id];
+  await query('DELETE FROM friendships WHERE user_a = $1 AND user_b = $2', [x, y]);
+  res.json({ ok: true });
+}));
+
+// Gera novo link do grupo (so o dono).
+app.post('/api/groups/:id/rotate', requireAuth, h(async (req, res) => {
+  const g = await first('SELECT * FROM groups WHERE id = $1', [Number(req.params.id)]);
+  if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (g.owner_id !== req.user.id) return res.status(403).json({ error: 'Só o dono pode gerar novo link.' });
+  const token = crypto.randomBytes(12).toString('base64url');
+  await query('UPDATE groups SET invite_token = $1 WHERE id = $2', [token, g.id]);
+  res.json({ token, url: groupUrl(req, token) });
+}));
+
+// Sair do grupo (nao-dono).
+app.post('/api/groups/:id/leave', requireAuth, h(async (req, res) => {
+  const gid = Number(req.params.id);
+  const g = await first('SELECT owner_id FROM groups WHERE id = $1', [gid]);
+  if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (g.owner_id === req.user.id) return res.status(400).json({ error: 'Você é o dono. Exclua o grupo em vez de sair.' });
+  await query('DELETE FROM group_members WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+  res.json({ ok: true });
+}));
+
+// Remover um membro (so o dono).
+app.delete('/api/groups/:id/members/:uid', requireAuth, h(async (req, res) => {
+  const gid = Number(req.params.id), uid = Number(req.params.uid);
+  const g = await first('SELECT owner_id FROM groups WHERE id = $1', [gid]);
+  if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (g.owner_id !== req.user.id) return res.status(403).json({ error: 'Só o dono pode remover membros.' });
+  if (uid === g.owner_id) return res.status(400).json({ error: 'O dono não pode ser removido.' });
+  await query('DELETE FROM group_members WHERE group_id = $1 AND user_id = $2', [gid, uid]);
+  res.json({ ok: true });
+}));
+
+// Excluir o grupo (so o dono).
+app.delete('/api/groups/:id', requireAuth, h(async (req, res) => {
+  const gid = Number(req.params.id);
+  const g = await first('SELECT owner_id FROM groups WHERE id = $1', [gid]);
+  if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
+  if (g.owner_id !== req.user.id) return res.status(403).json({ error: 'Só o dono pode excluir o grupo.' });
+  await query('DELETE FROM groups WHERE id = $1', [gid]);
+  res.json({ ok: true });
+}));
+
 // ---------- boot ----------
 initDb()
   .then(() => {
