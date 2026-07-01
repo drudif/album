@@ -66,8 +66,8 @@ const requireAuth = (req, res, next) =>
     next();
   }).catch(next);
 
-// Com trust proxy=1, req.ip ja e o IP real do cliente (menos spoofavel).
-const clientIp = (req) => req.ip || req.socket.remoteAddress;
+// IP real do cliente (atras da Cloudflare usa cf-connecting-ip; senao req.ip).
+const clientIp = (req) => req.headers['cf-connecting-ip'] || req.ip || req.socket.remoteAddress;
 
 // Rate limit simples em memoria (defesa extra contra brute force/spam).
 const _rl = new Map();
