@@ -205,7 +205,7 @@ async function renderProfile() {
         <input id="filterInput" placeholder="🔎 Filtrar por código ou país (ex.: BRA, 07, Argentina)" />
         <button class="sec" id="expandAll">Expandir tudo</button>
         <button class="sec" id="collapseAll">Recolher</button>
-        <button class="sec" id="exportBtn">📤 Exportar card</button>
+        <button class="sec" id="exportBtn">📤 Exportar meu álbum</button>
       </div>
       <div id="sections"></div>
       <div class="savebar">
