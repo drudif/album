@@ -419,6 +419,8 @@ button.ghost:hover, button.sec:hover, .gbtn:hover,
 }
 .auth-grid .hero h1 { font-size: clamp(80px, 17vw, 196px); margin: 0; line-height: 0.81; font-weight: 800; }
 .auth-grid .hero p, .auth-grid .hero .credit, .auth-grid .hero .marquee { margin: 0; }
+/* marquee limitado à largura da coluna (hero usa align-items:flex-start, então força stretch) */
+.auth-grid .hero .marquee { align-self: stretch; width: 100%; min-width: 0; max-width: 100%; }
 .auth-card { width: 100%; max-width: 480px; }
 @media (max-width: 880px) {
   .auth-grid { grid-template-columns: 1fr; gap: 14px; }
