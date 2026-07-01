@@ -120,7 +120,7 @@ input:focus { outline: none; box-shadow: var(--shadow); transform: translate(-1p
   background: var(--acid); border: 2px solid var(--ink); border-radius: 8px; box-shadow: var(--shadow-sm);
 }
 .brand-txt { display: flex; flex-direction: column; gap: 2px; }
-.brand strong { font-family: var(--display); font-weight: 800; font-size: 20px; line-height: 1; letter-spacing: -0.03em; text-transform: uppercase; }
+.brand strong { font-family: var(--display); font-weight: 800; font-size: 21px; line-height: 1; letter-spacing: -0.03em; }
 .credit { font-size: 10.5px; color: var(--muted); letter-spacing: .02em; }
 .credit a { color: var(--ink); font-weight: 700; text-decoration: none; box-shadow: inset 0 -0.5em 0 var(--acid); padding: 0 2px; }
 .credit a:hover { background: var(--acid); }
@@ -253,12 +253,24 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .sticker .slot-num i { font-style: normal; font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
 .sticker .slot-num b { font-family: var(--display); font-weight: 500; font-size: 22px; color: var(--ink); letter-spacing: -0.01em; }
 .sticker .slot-ph {
-  position: relative; height: 42px; background: var(--bg);
-  border: 2px solid var(--ink); border-radius: 6px;
+  position: relative; height: 42px; background: var(--bg); color: var(--ink);
+  border: 2px solid var(--ink); border-radius: 6px; overflow: hidden;
+  display: grid; place-items: center;
 }
-.sticker .slot-ph::before {
-  content: ''; position: absolute; top: -2px; left: 50%; transform: translateX(-50%);
-  width: 22px; height: 8px; background: var(--panel); border: 2px solid var(--ink); border-top: none; border-radius: 0 0 7px 7px;
+.sticker .slot-ph svg { width: 60%; height: 60%; display: block; }
+/* Brilho super simples (escudo e estrela): varredura de luz a cada 2s. */
+.sticker .slot-ph.shine::after {
+  content: ''; position: absolute; top: 0; left: -70%;
+  width: 45%; height: 100%; transform: skewX(-18deg); pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255,255,255,.85), transparent);
+  animation: slotShine 2s linear infinite;
+}
+@keyframes slotShine {
+  0% { left: -70%; }
+  55%, 100% { left: 130%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sticker .slot-ph.shine::after { animation: none; }
 }
 .sticker .toggles { grid-column: 1 / -1; display: flex; gap: 6px; }
 .sticker .toggles button {
@@ -269,8 +281,8 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 .sticker .toggles button.miss.on { background: var(--acid); color: var(--ink); }
 .sticker .toggles button.dup.on  { background: var(--ink); color: var(--acid); }
 .sticker.is-miss { box-shadow: var(--shadow-sm); border-color: var(--ink); }
-.sticker.is-miss .slot-ph { background: var(--acid); }
-.sticker.is-dup .slot-ph { background: var(--ink); }
+.sticker.is-miss .slot-ph { background: var(--acid); color: var(--on-acid); }
+.sticker.is-dup .slot-ph { background: var(--ink); color: var(--acid); }
 
 .savebar {
   position: sticky; bottom: 0; margin-top: 18px;
@@ -282,10 +294,22 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 /* ---------- vizinhos ---------- */
 .people-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
 .person {
+  position: relative;
   background: var(--panel); border: 2px solid var(--ink); border-radius: var(--radius);
   padding: 18px; cursor: pointer; box-shadow: var(--shadow); transition: transform .08s, box-shadow .08s;
 }
 .person:hover { transform: translate(4px, 4px); box-shadow: 0 0 0 0 var(--ink); }
+.card-x {
+  position: absolute; top: 8px; right: 8px; z-index: 2;
+  width: 26px; height: 26px; padding: 0; line-height: 1;
+  display: grid; place-items: center; cursor: pointer;
+  border: 2px solid var(--ink); border-radius: 6px; background: var(--panel);
+  color: var(--ink); font-size: 13px; font-weight: 700; box-shadow: none;
+  transition: background .08s, color .08s, transform .08s;
+}
+.card-x:hover { background: #e5484d; color: #fff; transform: translate(1px, 1px); }
+.ghost.danger { color: #e5484d; }
+.ghost.danger:hover { background: #e5484d; color: #fff; }
 .person .avatar {
   width: 44px; height: 44px; border-radius: 8px; border: 2px solid var(--ink);
   background: var(--acid); color: var(--ink); display: grid; place-items: center;
@@ -393,7 +417,7 @@ button.ghost:hover, button.sec:hover, .gbtn:hover,
   display: flex; flex-direction: column; align-items: flex-start;
   gap: clamp(22px, 3vw, 40px); /* respiro entre os conjuntos */
 }
-.auth-grid .hero h1 { font-size: clamp(62px, 13vw, 152px); margin: 0; line-height: 0.9; }
+.auth-grid .hero h1 { font-size: clamp(80px, 17vw, 196px); margin: 0; line-height: 0.81; font-weight: 800; }
 .auth-grid .hero p, .auth-grid .hero .credit, .auth-grid .hero .marquee { margin: 0; }
 .auth-card { width: 100%; max-width: 480px; }
 @media (max-width: 880px) {
