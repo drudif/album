@@ -63,6 +63,20 @@ async function loadUser(req) {
 const requireAuth = (req, res, next) =>
   loadUser(req).then((u) => {
     if (!u) return res.status(401).json({ error: 'Faça login para continuar.' });
+    if (u.banned) return res.status(403).json({ error: 'Conta suspensa.' });
+    next();
+  }).catch(next);
+
+// Admin: e-mails com acesso ao painel (env ADMIN_EMAILS, separados por vírgula;
+// fallback para o dono do projeto). Comparação sempre em minúsculas.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'f.drudi@gmail.com')
+  .split(',').map((e) => e.trim().toLowerCase()).filter(Boolean);
+const isAdmin = (u) => !!u && ADMIN_EMAILS.includes(String(u.email || '').toLowerCase());
+const requireAdmin = (req, res, next) =>
+  loadUser(req).then((u) => {
+    if (!u) return res.status(401).json({ error: 'Faça login para continuar.' });
+    if (u.banned) return res.status(403).json({ error: 'Conta suspensa.' });
+    if (!isAdmin(u)) return res.status(403).json({ error: 'Acesso restrito.' });
     next();
   }).catch(next);
 
@@ -253,7 +267,7 @@ app.post('/api/register', authLimit, h(async (req, res) => {
   );
   const { token, expires } = await createSession(u.id);
   setSessionCookie(res, token, expires);
-  res.json({ user: publicUser(u, true) });
+  res.json({ user: { ...publicUser(u, true), admin: isAdmin(u) } });
 }));
 
 app.post('/api/login', authLimit, h(async (req, res) => {
@@ -268,9 +282,10 @@ app.post('/api/login', authLimit, h(async (req, res) => {
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ error: 'Email ou senha incorretos.' });
   }
+  if (user.banned) return res.status(403).json({ error: 'Conta suspensa.' });
   const { token, expires } = await createSession(user.id);
   setSessionCookie(res, token, expires);
-  res.json({ user: publicUser(user, true) });
+  res.json({ user: { ...publicUser(user, true), admin: isAdmin(user) } });
 }));
 
 app.post('/api/logout', h(async (req, res) => {
@@ -282,7 +297,8 @@ app.post('/api/logout', h(async (req, res) => {
 app.get('/api/me', h(async (req, res) => {
   const u = await loadUser(req);
   if (!u) return res.status(401).json({ error: 'Não autenticado.' });
-  res.json({ user: publicUser(u, true) });
+  if (u.banned) return res.status(403).json({ error: 'Conta suspensa.' });
+  res.json({ user: { ...publicUser(u, true), admin: isAdmin(u) } });
 }));
 
 // ---------- album do usuario (escopo: o proprio) ----------
@@ -536,6 +552,98 @@ app.delete('/api/groups/:id', requireAuth, h(async (req, res) => {
   if (!g) return res.status(404).json({ error: 'Grupo não encontrado.' });
   if (g.owner_id !== req.user.id) return res.status(403).json({ error: 'Só o dono pode excluir o grupo.' });
   await query('DELETE FROM groups WHERE id = $1', [gid]);
+  res.json({ ok: true });
+}));
+
+// ---------- painel de admin (restrito a ADMIN_EMAILS) ----------
+
+// Lista todos os usuários com estatísticas de uso.
+app.get('/api/admin/users', requireAdmin, h(async (req, res) => {
+  const list = await rows(`
+    SELECT u.id, u.name, u.email, u.created_at, u.banned, u.age_confirmed,
+           (u.google_id IS NOT NULL)     AS google,
+           (u.password_hash IS NOT NULL) AS has_password,
+           COALESCE(s.missing, 0)    AS missing,
+           COALESCE(s.duplicates, 0) AS duplicates,
+           COALESCE(f.friends, 0)    AS friends,
+           COALESCE(gm.groups, 0)    AS groups
+    FROM users u
+    LEFT JOIN (
+      SELECT user_id,
+             COUNT(*) FILTER (WHERE status = 'missing')   AS missing,
+             COUNT(*) FILTER (WHERE status = 'duplicate') AS duplicates
+      FROM user_stickers GROUP BY user_id
+    ) s ON s.user_id = u.id
+    LEFT JOIN (
+      SELECT uid, COUNT(*) AS friends FROM (
+        SELECT user_a AS uid FROM friendships
+        UNION ALL
+        SELECT user_b AS uid FROM friendships
+      ) x GROUP BY uid
+    ) f ON f.uid = u.id
+    LEFT JOIN (
+      SELECT user_id, COUNT(*) AS groups FROM group_members GROUP BY user_id
+    ) gm ON gm.user_id = u.id
+    ORDER BY u.created_at DESC
+  `);
+  res.json({
+    total: list.length,
+    users: list.map((u) => ({
+      id: u.id, name: u.name, email: u.email, createdAt: u.created_at,
+      banned: u.banned, ageConfirmed: u.age_confirmed,
+      google: u.google, hasPassword: u.has_password,
+      missing: Number(u.missing), duplicates: Number(u.duplicates),
+      friends: Number(u.friends), groups: Number(u.groups),
+      admin: ADMIN_EMAILS.includes(String(u.email || '').toLowerCase()),
+    })),
+  });
+}));
+
+// Banir / desbanir (banir derruba as sessões ativas).
+app.post('/api/admin/users/:id/ban', requireAdmin, h(async (req, res) => {
+  const id = Number(req.params.id);
+  const target = await getUser(id);
+  if (!target) return res.status(404).json({ error: 'Usuário não encontrado.' });
+  if (isAdmin(target)) return res.status(400).json({ error: 'Não dá pra banir um admin.' });
+  const banned = req.body.banned === true;
+  await query('UPDATE users SET banned = $1 WHERE id = $2', [banned, id]);
+  if (banned) await query('DELETE FROM sessions WHERE user_id = $1', [id]);
+  res.json({ ok: true, banned });
+}));
+
+// Alterar nome / e-mail.
+app.patch('/api/admin/users/:id', requireAdmin, h(async (req, res) => {
+  const id = Number(req.params.id);
+  const target = await getUser(id);
+  if (!target) return res.status(404).json({ error: 'Usuário não encontrado.' });
+  const fields = [], vals = [];
+  let i = 1;
+  if (typeof req.body.name === 'string') {
+    const name = req.body.name.trim();
+    if (!name) return res.status(400).json({ error: 'Nome não pode ficar vazio.' });
+    if (name.length > 80) return res.status(400).json({ error: 'Nome muito longo.' });
+    fields.push(`name = $${i++}`); vals.push(name);
+  }
+  if (typeof req.body.email === 'string') {
+    const email = req.body.email.trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) return res.status(400).json({ error: 'Email inválido.' });
+    const dupe = await first('SELECT id FROM users WHERE email = $1 AND id <> $2', [email, id]);
+    if (dupe) return res.status(409).json({ error: 'Já existe usuário com esse email.' });
+    fields.push(`email = $${i++}`); vals.push(email);
+  }
+  if (!fields.length) return res.status(400).json({ error: 'Nada para atualizar.' });
+  vals.push(id);
+  const u = await first(`UPDATE users SET ${fields.join(', ')} WHERE id = $${i} RETURNING *`, vals);
+  res.json({ user: { id: u.id, name: u.name, email: u.email } });
+}));
+
+// Excluir usuário (cascade: figurinhas, sessões, amizades, grupos que ele criou).
+app.delete('/api/admin/users/:id', requireAdmin, h(async (req, res) => {
+  const id = Number(req.params.id);
+  const target = await getUser(id);
+  if (!target) return res.status(404).json({ error: 'Usuário não encontrado.' });
+  if (isAdmin(target)) return res.status(400).json({ error: 'Não dá pra excluir um admin.' });
+  await query('DELETE FROM users WHERE id = $1', [id]);
   res.json({ ok: true });
 }));
 

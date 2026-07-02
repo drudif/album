@@ -463,3 +463,30 @@ button.ghost:hover, button.sec:hover, .gbtn:hover,
 }
 .invite-card .sub { margin: 12px auto 22px; max-width: 46ch; }
 .invite-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+/* ---------- painel de admin ---------- */
+.admin-wrap { overflow-x: auto; border: 2px solid var(--ink); border-radius: var(--radius-sm); }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 720px; }
+.admin-table th, .admin-table td { text-align: left; padding: 10px 12px; border-bottom: 2px solid var(--line); vertical-align: middle; white-space: nowrap; }
+.admin-table thead th {
+  background: var(--panel-2); font-family: var(--display); font-weight: 700;
+  text-transform: uppercase; letter-spacing: .03em; font-size: 11px; position: sticky; top: 0;
+}
+.admin-table tbody tr:last-child td { border-bottom: none; }
+.admin-table tbody tr:hover { background: var(--panel-2); }
+.admin-table td.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: var(--muted); }
+.admin-table tr.is-banned { opacity: .6; }
+.admin-table .empty { border-bottom: none; }
+.admin-table .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 3px 7px; border: 2px solid var(--ink); border-radius: 4px; text-transform: uppercase; letter-spacing: .03em; }
+.admin-table .tag.adm { background: var(--ink); color: var(--acid); }
+.admin-table .tag.ggl { background: var(--panel); color: var(--ink); }
+.admin-table .tag.ban { background: #e5484d; color: #fff; border-color: #e5484d; }
+.admin-table .tag.ok  { background: var(--acid); color: var(--on-acid); }
+.admin-actions { display: flex; gap: 6px; }
+.mini-btn {
+  font-size: 11px; padding: 6px 10px; text-transform: uppercase; letter-spacing: .02em;
+  background: var(--bg); color: var(--ink); border: 2px solid var(--ink); border-radius: 6px; box-shadow: var(--shadow-sm);
+}
+.mini-btn:hover { background: var(--acid); transform: translate(1px, 1px); box-shadow: 1px 1px 0 0 var(--ink); }
+.mini-btn.danger { color: #e5484d; }
+.mini-btn.danger:hover { background: #e5484d; color: #fff; border-color: #e5484d; }
