@@ -95,7 +95,21 @@ async function renderAuth() {
 
   const h = C.home;
   const marq = h.marquee.map((s) => `<span>${esc(s)}</span>`).join('');
+
+  // Se a pessoa chegou por um link de convite, mostra uma faixa personalizada.
+  let bannerHtml = '';
+  const inv = getPendingInvite();
+  if (inv) {
+    try {
+      const info = await fetchInvite(inv);
+      bannerHtml = inv.kind === 'group'
+        ? `<div class="invite-banner">${h.inviteBannerGroup(esc(info.group.ownerName), esc(info.group.name))}</div>`
+        : `<div class="invite-banner">${h.inviteBannerFriend(esc(info.inviter.name))}</div>`;
+    } catch (e) { clearPendingInvite(); /* convite inválido: segue sem faixa */ }
+  }
+
   app.innerHTML = `
+    ${bannerHtml}
     <div class="auth-grid">
     <div class="hero">
       <span class="sticker-badge">${esc(h.badge)}</span>
@@ -560,6 +574,9 @@ async function renderFriends() {
         <button id="copyInvite" style="flex:none">${esc(F.copyLink)}</button>
         <button id="rotateInvite" class="ghost" style="flex:none" title="${esc(F.newLinkTitle)}">${esc(F.newLink)}</button>
       </div>
+      <div class="row" style="margin-top:10px">
+        <button id="shareInvite" class="sec" style="flex:none">${esc(C.share.friendBtn)}</button>
+      </div>
     </div>
     <div class="card">
       <h2>${esc(F.listTitle)} <span style="color:var(--muted);font-weight:400">(${friends.length})</span></h2>
@@ -580,6 +597,7 @@ async function renderFriends() {
       toast(F.newLinkDone);
     } catch (err) { toast(err.message, true); }
   };
+  $('#shareInvite').onclick = () => openInviteShare('friend', { url: inviteUrl });
   app.querySelectorAll('[data-unfriend]').forEach((btn) => (btn.onclick = async (e) => {
     e.stopPropagation();
     if (!confirm(F.confirmUnfriend)) return;
@@ -661,6 +679,9 @@ async function renderGroup(id) {
         <button id="copyGroup" style="flex:none">${esc(GR.copyLink)}</button>
         ${group.owner ? `<button id="rotateGroup" class="ghost" style="flex:none" title="${esc(GR.newLinkTitle)}">${esc(GR.newLink)}</button>` : ''}
       </div>
+      <div class="row" style="margin-top:10px">
+        <button id="shareGroup" class="sec" style="flex:none">${esc(C.share.groupBtn)}</button>
+      </div>
     </div>
     <div class="card">
       <h2>${esc(GR.membersTitle)} <span style="color:var(--muted);font-weight:400">(${members.length})</span></h2>
@@ -683,6 +704,7 @@ async function renderGroup(id) {
     catch { const i = $('#groupUrl'); i.select(); document.execCommand('copy'); }
     toast(GR.linkCopied);
   };
+  $('#shareGroup').onclick = () => openInviteShare('group', { url: groupUrl, groupName: group.name });
   const rotateBtn = $('#rotateGroup');
   if (rotateBtn) rotateBtn.onclick = async () => {
     if (!confirm(GR.confirmNewLink)) return;
@@ -914,38 +936,74 @@ async function openTradeModal(friendId) {
   };
 }
 
-// ====== Convite de amizade (link ?convite=token) ======
-async function processInvite() {
-  const token = new URLSearchParams(location.search).get('convite');
-  if (!token) return;
-  history.replaceState(null, '', location.pathname); // limpa a URL
-  try {
-    const info = await api('/api/friends/invite/' + encodeURIComponent(token));
-    if (info.isSelf) { toast(C.invites.friendSelf); return; }
-    if (!confirm(C.invites.friendConfirm(info.inviter.name))) return;
-    await api('/api/friends/accept', { method: 'POST', body: { token } });
-    toast(C.invites.friendDone);
-    go('friends');
-  } catch (err) {
-    toast(err.message, true);
-  }
+// ====== Convite pendente (link ?convite=token ou ?grupo=token) ======
+// Guardamos em sessionStorage para sobreviver à limpeza da URL e ao
+// redirecionamento do login com Google.
+function capturePendingInvite() {
+  const q = new URLSearchParams(location.search);
+  const conv = q.get('convite');
+  const grp = q.get('grupo');
+  if (conv) sessionStorage.setItem('pendingInvite', JSON.stringify({ kind: 'friend', token: conv }));
+  else if (grp) sessionStorage.setItem('pendingInvite', JSON.stringify({ kind: 'group', token: grp }));
+  if (conv || grp) history.replaceState(null, '', location.pathname); // limpa a URL
+}
+function getPendingInvite() {
+  try { return JSON.parse(sessionStorage.getItem('pendingInvite') || 'null'); }
+  catch { return null; }
+}
+function clearPendingInvite() { sessionStorage.removeItem('pendingInvite'); }
+
+// Busca o preview do convite (endpoint público — funciona logado ou não).
+async function fetchInvite(inv) {
+  const base = inv.kind === 'friend' ? '/api/friends/invite/' : '/api/groups/invite/';
+  return api(base + encodeURIComponent(inv.token));
 }
 
-// ====== Convite de grupo (link ?grupo=token) ======
-async function processGroupInvite() {
-  const token = new URLSearchParams(location.search).get('grupo');
-  if (!token) return;
-  history.replaceState(null, '', location.pathname);
-  try {
-    const info = await api('/api/groups/invite/' + encodeURIComponent(token));
-    if (info.isMember) { toast(C.invites.groupAlready); go('group', info.group.id); return; }
-    if (!confirm(C.invites.groupConfirm(info.group.name))) return;
-    const { group } = await api('/api/groups/join', { method: 'POST', body: { token } });
-    toast(C.invites.groupDone);
-    go('group', group.id);
-  } catch (err) {
-    toast(err.message, true);
-  }
+// ====== Tela de convite recebido (usuário já logado) ======
+async function renderInvite(inv) {
+  const I = C.invite;
+  setActiveNav(null);
+  app.innerHTML = `<div class="empty">${esc(I.loading)}</div>`;
+  let info;
+  try { info = await fetchInvite(inv); }
+  catch (err) { clearPendingInvite(); toast(err.message || I.error, true); return go('profile'); }
+
+  // Já resolvido (próprio link / já é membro): manda direto e sai.
+  if (inv.kind === 'friend' && info.isSelf) { clearPendingInvite(); toast(I.friendSelf); return go('friends'); }
+  if (inv.kind === 'group' && info.isMember) { clearPendingInvite(); toast(I.groupAlready); return go('group', info.group.id); }
+
+  const isGroup = inv.kind === 'group';
+  const title = isGroup ? I.groupTitle(info.group.name) : I.friendTitle(info.inviter.name);
+  const sub = isGroup ? I.groupSub(info.group.ownerName) : I.friendSub;
+  const avatarName = isGroup ? info.group.name : info.inviter.name;
+
+  app.innerHTML = `
+    <div class="card invite-card">
+      <div class="invite-hero">
+        <div class="avatar big">${esc(initials(avatarName))}</div>
+        <h2>${esc(title)}</h2>
+        ${isGroup ? `<div class="invite-meta">${esc(I.groupMembers(info.group.members))}</div>` : ''}
+      </div>
+      <div class="sub">${esc(sub)}</div>
+      <div class="invite-actions">
+        <button class="ghost" id="invDecline">${esc(I.decline)}</button>
+        <button id="invAccept">${esc(I.accept)}</button>
+      </div>
+    </div>`;
+
+  $('#invDecline').onclick = () => { clearPendingInvite(); go('profile'); };
+  $('#invAccept').onclick = async () => {
+    try {
+      if (isGroup) {
+        const { group } = await api('/api/groups/join', { method: 'POST', body: { token: inv.token } });
+        clearPendingInvite(); toast(I.groupJoined); go('group', group.id);
+      } else {
+        await api('/api/friends/accept', { method: 'POST', body: { token: inv.token } });
+        clearPendingInvite(); toast(I.friendAccepted);
+        state.backView = ['friends']; go('person', info.inviter.id);
+      }
+    } catch (err) { toast(err.message, true); }
+  };
 }
 
 // ====== Boot ======
@@ -953,9 +1011,9 @@ async function boot() {
   $('#nav').classList.remove('hidden');
   document.body.classList.add('logged-in'); // some com o cursor custom fora da home
   $('#whoami').textContent = state.user.name;
+  const inv = getPendingInvite();
+  if (inv) return renderInvite(inv); // convite tem prioridade sobre a home
   go('profile');
-  processInvite();
-  processGroupInvite();
 }
 
 async function logout() {
@@ -964,6 +1022,54 @@ async function logout() {
   state.user = null;
   state.dirty = false;
   renderAuth();
+}
+
+// ====== Convidar por email / copiar mensagem (lightbox) ======
+function openInviteShare(kind, ctx) {
+  const S = C.share;
+  const me = (state.user && state.user.name) || '';
+  const isGroup = kind === 'group';
+  const subject = isGroup ? S.groupSubject(me, ctx.groupName) : S.friendSubject(me);
+  const message = isGroup ? S.groupMessage(me, ctx.groupName, ctx.url) : S.friendMessage(me, ctx.url);
+  const subtitle = isGroup ? S.groupSubtitle : S.friendSubtitle;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <div class="lb-card">
+      <h2>${esc(S.title)}</h2>
+      <div class="sub">${esc(subtitle)}</div>
+      <div class="field">
+        <label>${esc(S.toLabel)}</label>
+        <input id="invTo" type="email" placeholder="${esc(S.toPlaceholder)}" />
+      </div>
+      <div class="field">
+        <label>${esc(S.msgLabel)}</label>
+        <textarea id="invMsg" rows="7">${esc(message)}</textarea>
+      </div>
+      <div class="lb-actions">
+        <button class="ghost" type="button" id="invCopy">${esc(S.copyBtn)}</button>
+        <button type="button" id="invSend">${esc(S.sendBtn)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+
+  wrap.querySelector('#invCopy').onclick = async () => {
+    const msg = wrap.querySelector('#invMsg').value;
+    try { await navigator.clipboard.writeText(msg); }
+    catch { const t = wrap.querySelector('#invMsg'); t.select(); document.execCommand('copy'); }
+    toast(S.copied);
+  };
+  wrap.querySelector('#invSend').onclick = () => {
+    const to = wrap.querySelector('#invTo').value.trim();
+    const msg = wrap.querySelector('#invMsg').value;
+    const href = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(msg)}`;
+    window.location.href = href;
+    close();
+    toast(S.opening);
+  };
 }
 
 // ====== Reportar bug (lightbox -> e-mail) ======
@@ -1007,6 +1113,7 @@ function openBugReport() {
 async function init() {
   window._go = go; // usado por onclick inline
   applyMeta();     // título da aba, cabeçalho, nav e crédito vindos de content.js
+  capturePendingInvite(); // guarda ?convite= / ?grupo= antes de qualquer coisa
   document.addEventListener('click', (e) => {
     const b = e.target.closest && e.target.closest('.report-bugs');
     if (b) { e.preventDefault(); openBugReport(); }
