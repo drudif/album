@@ -68,6 +68,55 @@ window.C = {
     humanCheck: 'Confirme que você é humano.',
     accountCreated: 'Conta criada! 🎉',
     welcomeBack: 'Bem-vindo de volta!',
+
+    // faixa personalizada quando a pessoa chega por um link de convite
+    inviteBannerFriend: (nome) =>
+      `🤝 <b>${nome}</b> te convidou para se conectar. Crie sua conta ou entre para aceitar.`,
+    inviteBannerGroup: (nome, grupo) =>
+      `👥 <b>${nome}</b> te convidou para o grupo <b>"${grupo}"</b>. Crie sua conta ou entre para aceitar.`,
+  },
+
+  /* ---- Tela de convite recebido (quando a pessoa já está logada) ---- */
+  invite: {
+    loading: 'Abrindo convite…',
+    friendTitle: (nome) => `${nome} quer se conectar`,
+    friendSub: 'Se aceitar, os álbuns de vocês ficam visíveis um pro outro e o app cruza o que falta com o que sobra.',
+    groupTitle: (grupo) => `Convite para o grupo "${grupo}"`,
+    groupSub: (nome) => `${nome} te convidou. Todos os membros veem os álbuns uns dos outros e o app cruza as figurinhas entre todos.`,
+    groupMembers: (n) => `👥 ${n} ${n === 1 ? 'membro' : 'membros'}`,
+    accept: 'Aceitar convite',
+    decline: 'Agora não',
+    friendAccepted: 'Vocês agora são amigos! 🤝',
+    friendSelf: 'Esse é o seu próprio link de convite. 🙂',
+    groupJoined: 'Você entrou no grupo! 👥',
+    groupAlready: 'Você já participa desse grupo.',
+    error: 'Convite inválido ou expirado.',
+  },
+
+  /* ---- Convidar por email / mensagem pronta ---- */
+  share: {
+    friendBtn: '✉️ Convidar por email',
+    groupBtn: '✉️ Convidar por email',
+    title: 'Convidar',
+    friendSubtitle: 'Mande o convite por email (abre seu app de email) ou copie a mensagem pronta e envie como quiser.',
+    groupSubtitle: 'Chame gente pro grupo por email (abre seu app de email) ou copie a mensagem pronta e envie como quiser.',
+    toLabel: 'Email de quem você quer convidar (opcional)',
+    toPlaceholder: 'amigo@email.com',
+    msgLabel: 'Mensagem (pode editar)',
+    copyBtn: '📋 Copiar mensagem',
+    sendBtn: '✉️ Enviar por email',
+    copied: 'Mensagem copiada! 📋',
+    opening: 'Abrindo seu e-mail… ✉️',
+    // assuntos e corpos padrão — ${nome} = você, ${grupo} = nome do grupo, ${url} = link
+    friendSubject: (nome) => `${nome} te convidou pro Completaí`,
+    groupSubject: (nome, grupo) => `${nome} te convidou pro grupo "${grupo}" no Completaí`,
+    friendMessage: (nome, url) =>
+      `Oi! Sou ${nome}. Bora trocar figurinhas da Copa 2026 no Completaí?\n\n` +
+      `É de graça: você cadastra suas repetidas e faltantes e o site cruza as trocas com as minhas.\n\n` +
+      `Aceita meu convite por aqui:\n${url}`,
+    groupMessage: (nome, grupo, url) =>
+      `Oi! Sou ${nome}. Criei o grupo "${grupo}" no Completaí pra trocar figurinhas da Copa 2026.\n\n` +
+      `Entra pelo link, cadastra suas repetidas e faltantes, e o site cruza as trocas entre todo mundo do grupo:\n${url}`,
   },
 
   /* ---- Meu Álbum (editor) ---- */

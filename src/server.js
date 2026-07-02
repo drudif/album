@@ -335,11 +335,17 @@ app.get('/api/friends/link', requireAuth, h(async (req, res) => {
   res.json({ token, url });
 }));
 
-// Quem está convidando (para confirmar antes de aceitar).
-app.get('/api/friends/invite/:token', requireAuth, h(async (req, res) => {
+// Quem está convidando (público: serve para a landing personalizada mesmo
+// deslogado). Se houver sessão, informa se é o próprio usuário.
+app.get('/api/friends/invite/:token', h(async (req, res) => {
   const inviter = await first('SELECT id, name FROM users WHERE invite_token = $1', [req.params.token]);
   if (!inviter) return res.status(404).json({ error: 'Convite inválido ou expirado.' });
-  res.json({ inviter: { id: inviter.id, name: inviter.name }, isSelf: inviter.id === req.user.id });
+  await loadUser(req);
+  res.json({
+    inviter: { id: inviter.id, name: inviter.name },
+    isSelf: req.user ? inviter.id === req.user.id : false,
+    loggedIn: !!req.user,
+  });
 }));
 
 // Aceitar o convite -> cria a amizade (mutua).
@@ -448,11 +454,22 @@ app.get('/api/groups/:id', requireAuth, h(async (req, res) => {
   });
 }));
 
-// Consulta o convite do grupo (para confirmar antes de entrar).
-app.get('/api/groups/invite/:token', requireAuth, h(async (req, res) => {
-  const g = await first('SELECT id, name FROM groups WHERE invite_token = $1', [req.params.token]);
+// Consulta o convite do grupo (público: landing personalizada mesmo deslogado).
+// Traz o nome do dono (quem convida) e a contagem de membros.
+app.get('/api/groups/invite/:token', h(async (req, res) => {
+  const g = await first(
+    `SELECT g.id, g.name, u.name AS owner_name,
+            (SELECT COUNT(*) FROM group_members m WHERE m.group_id = g.id) AS members
+     FROM groups g JOIN users u ON u.id = g.owner_id WHERE g.invite_token = $1`,
+    [req.params.token]
+  );
   if (!g) return res.status(404).json({ error: 'Convite de grupo inválido.' });
-  res.json({ group: { id: g.id, name: g.name }, isMember: await isGroupMember(g.id, req.user.id) });
+  await loadUser(req);
+  res.json({
+    group: { id: g.id, name: g.name, ownerName: g.owner_name, members: Number(g.members) },
+    isMember: req.user ? await isGroupMember(g.id, req.user.id) : false,
+    loggedIn: !!req.user,
+  });
 }));
 
 // Entrar no grupo via token (aceite).
