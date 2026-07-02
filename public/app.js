@@ -54,6 +54,7 @@ function applyMeta() {
   const setNav = (v, t) => { const b = document.querySelector(`#nav button[data-view="${v}"]`); if (b) b.textContent = t; };
   setNav('profile', nav.profile); setNav('friends', nav.friends);
   setNav('groups', nav.groups); setNav('matches', nav.matches);
+  setNav('admin', nav.admin);
   const out = document.querySelector('#logoutBtn'); if (out) out.textContent = nav.logout;
 }
 
@@ -83,6 +84,7 @@ async function go(view, arg) {
   if (view === 'groups') return renderGroups();
   if (view === 'group') return renderGroup(arg);
   if (view === 'matches') return renderMatches();
+  if (view === 'admin') return renderAdmin();
   if (view === 'person') return renderPerson(arg);
 }
 
@@ -936,6 +938,101 @@ async function openTradeModal(friendId) {
   };
 }
 
+// ====== Painel de admin ======
+let adminUsers = [];
+async function renderAdmin() {
+  if (!state.user || !state.user.admin) return go('profile'); // proteção no cliente (servidor também barra)
+  const A = C.admin;
+  setActiveNav('admin');
+  app.innerHTML = `<div class="empty">${esc(A.loading)}</div>`;
+  try {
+    const data = await api('/api/admin/users');
+    adminUsers = data.users;
+  } catch (err) {
+    app.innerHTML = `<div class="card"><div class="empty">${esc(err.message)}</div></div>`;
+    return;
+  }
+
+  app.innerHTML = `
+    <div class="card">
+      <h2>${esc(A.title)}</h2>
+      <div class="sub">${esc(A.subtitle(adminUsers.length))}</div>
+      <div class="editor-toolbar"><input id="adminFilter" placeholder="${esc(A.search)}" /></div>
+      <div class="admin-wrap"><table class="admin-table" id="adminTable"></table></div>
+    </div>`;
+
+  const draw = (filter = '') => {
+    const list = adminUsers.filter(
+      (u) => !filter || u.name.toLowerCase().includes(filter) || u.email.toLowerCase().includes(filter)
+    );
+    $('#adminTable').innerHTML = `
+      <thead><tr>
+        <th>${esc(A.colName)}</th><th>${esc(A.colEmail)}</th><th>${esc(A.colJoined)}</th>
+        <th>${esc(A.colAlbum)}</th><th>${esc(A.colNetwork)}</th><th>${esc(A.colStatus)}</th><th>${esc(A.colActions)}</th>
+      </tr></thead>
+      <tbody>${list.length ? list.map(adminRow).join('') : `<tr><td colspan="7" class="empty">${esc(filter ? A.noResults : A.empty)}</td></tr>`}</tbody>`;
+  };
+  draw('');
+  $('#adminFilter').oninput = (e) => draw(e.target.value.trim().toLowerCase());
+
+  $('#adminTable').onclick = async (e) => {
+    const btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    const id = Number(btn.dataset.id);
+    const u = adminUsers.find((x) => x.id === id);
+    if (!u) return;
+    try {
+      if (btn.dataset.act === 'edit') {
+        const name = prompt(A.editNamePrompt, u.name);
+        if (name === null) return;
+        const email = prompt(A.editEmailPrompt, u.email);
+        if (email === null) return;
+        const body = {};
+        if (name.trim() && name.trim() !== u.name) body.name = name.trim();
+        if (email.trim() && email.trim().toLowerCase() !== u.email) body.email = email.trim();
+        if (!Object.keys(body).length) return;
+        await api('/api/admin/users/' + id, { method: 'PATCH', body });
+        toast(A.updated);
+      } else if (btn.dataset.act === 'ban') {
+        const toBan = !u.banned;
+        if (!confirm(toBan ? A.confirmBan(u.name) : A.confirmUnban(u.name))) return;
+        await api('/api/admin/users/' + id + '/ban', { method: 'POST', body: { banned: toBan } });
+        toast(toBan ? A.banned : A.unbanned);
+      } else if (btn.dataset.act === 'del') {
+        if (!confirm(A.confirmDelete(u.name))) return;
+        await api('/api/admin/users/' + id, { method: 'DELETE' });
+        toast(A.deleted);
+      }
+      renderAdmin();
+    } catch (err) { toast(err.message, true); }
+  };
+}
+
+function adminRow(u) {
+  const A = C.admin;
+  const badges = [
+    u.admin ? `<span class="tag adm">${esc(A.badgeAdmin)}</span>` : '',
+    u.google ? `<span class="tag ggl">${esc(A.badgeGoogle)}</span>` : '',
+    u.banned ? `<span class="tag ban">${esc(A.badgeBanned)}</span>` : `<span class="tag ok">${esc(A.badgeActive)}</span>`,
+  ].filter(Boolean).join(' ');
+  const d = new Date(u.createdAt);
+  const joined = isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-BR');
+  const actions = u.admin
+    ? `<span class="muted">—</span>`
+    : `<button class="mini-btn" data-act="edit" data-id="${u.id}">${esc(A.edit)}</button>
+       <button class="mini-btn" data-act="ban" data-id="${u.id}">${esc(u.banned ? A.unban : A.ban)}</button>
+       <button class="mini-btn danger" data-act="del" data-id="${u.id}">${esc(A.del)}</button>`;
+  return `<tr class="${u.banned ? 'is-banned' : ''}">
+    <td><b>${esc(u.name)}</b></td>
+    <td class="mono">${esc(u.email)}</td>
+    <td>${esc(joined)}</td>
+    <td>${esc(A.albumCell(u.missing, u.duplicates))}</td>
+    <td>${esc(A.networkCell(u.friends, u.groups))}</td>
+    <td>${badges}</td>
+    <td class="admin-actions">${actions}</td>
+  </tr>`;
+}
+
 // ====== Convite pendente (link ?convite=token ou ?grupo=token) ======
 // Guardamos em sessionStorage para sobreviver à limpeza da URL e ao
 // redirecionamento do login com Google.
@@ -1011,6 +1108,7 @@ async function boot() {
   $('#nav').classList.remove('hidden');
   document.body.classList.add('logged-in'); // some com o cursor custom fora da home
   $('#whoami').textContent = state.user.name;
+  $('#navAdmin').classList.toggle('hidden', !state.user.admin); // só admin vê
   const inv = getPendingInvite();
   if (inv) return renderInvite(inv); // convite tem prioridade sobre a home
   go('profile');

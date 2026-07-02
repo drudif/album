@@ -32,6 +32,7 @@ window.C = {
     friends: 'Amigos',
     groups: 'Grupos',
     matches: 'Trocas',
+    admin: 'Admin',
     logout: 'Sair',
   },
 
@@ -312,6 +313,31 @@ window.C = {
     genError: 'Não consegui gerar o card.',
     done: 'Card exportado! 📤',
     fileName: 'meu-album-copa-2026.png',
+  },
+
+  /* ---- Painel de admin (só quem é admin vê) ---- */
+  admin: {
+    loading: 'Carregando usuários…',
+    title: 'Usuários',
+    subtitle: (n) => `${n} ${n === 1 ? 'pessoa cadastrada' : 'pessoas cadastradas'}.`,
+    search: '🔎 Filtrar por nome ou email',
+    colName: 'Nome', colEmail: 'Email', colJoined: 'Cadastro',
+    colAlbum: 'Álbum', colNetwork: 'Rede', colStatus: 'Status', colActions: 'Ações',
+    albumCell: (miss, dup) => `${miss} faltam · ${dup} rep.`,
+    networkCell: (fr, gr) => `${fr} amigos · ${gr} grupos`,
+    badgeAdmin: 'ADMIN', badgeGoogle: 'GOOGLE', badgeBanned: 'BANIDO', badgeActive: 'ativo',
+    edit: 'Editar', ban: 'Banir', unban: 'Desbanir', del: 'Excluir',
+    editNamePrompt: 'Novo nome:',
+    editEmailPrompt: 'Novo email:',
+    confirmBan: (nome) => `Banir ${nome}? A conta fica suspensa e as sessões caem na hora.`,
+    confirmUnban: (nome) => `Desbanir ${nome}?`,
+    confirmDelete: (nome) => `EXCLUIR ${nome} em definitivo? Remove o álbum, as amizades e os grupos criados por ele. Não dá pra desfazer.`,
+    banned: 'Usuário banido.',
+    unbanned: 'Usuário desbanido.',
+    deleted: 'Usuário excluído.',
+    updated: 'Usuário atualizado.',
+    empty: 'Nenhum usuário ainda.',
+    noResults: 'Nenhum usuário para esse filtro.',
   },
 
   /* ---- Mensagens gerais ---- */
