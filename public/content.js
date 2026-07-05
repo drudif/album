@@ -15,8 +15,8 @@ window.C = {
 
   /* ---- Marca / topo / aba do navegador ---- */
   meta: {
-    pageTitle: 'Completa Aí · Copa 2026',   // título da aba do navegador
-    headerTitle: 'Completaí',                // nome no cabeçalho
+    pageTitle: 'Álbum Completo · Copa 2026',   // título da aba do navegador
+    headerTitle: 'Álbum Completo',             // nome no cabeçalho
     credit: {
       // linha "powered by claude code · made by fernando drudi · reporte bugs"
       prefix: 'powered by claude code · made by ',
@@ -39,9 +39,9 @@ window.C = {
   /* ---- Tela inicial (login / cadastro) ---- */
   home: {
     badge: '⚽ Álbum de figurinhas · Copa 2026',
-    titleLine1: 'Com-',        // 1ª linha do título grande
-    titleLine2: 'pletaí',      // 2ª linha do título grande
-    titleFull: 'Completaí',    // usado no efeito glitch (mantenha sem quebra)
+    titleLine1: 'Álbum',       // 1ª linha do título grande
+    titleLine2: 'Completo',    // 2ª linha do título grande
+    titleFull: 'Álbum Completo', // usado no efeito glitch (mantenha sem quebra)
     description:
       'Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos. ' +
       'O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.',
@@ -109,14 +109,14 @@ window.C = {
     copied: 'Mensagem copiada! 📋',
     opening: 'Abrindo seu e-mail… ✉️',
     // assuntos e corpos padrão — ${nome} = você, ${grupo} = nome do grupo, ${url} = link
-    friendSubject: (nome) => `${nome} te convidou pro Completaí`,
-    groupSubject: (nome, grupo) => `${nome} te convidou pro grupo "${grupo}" no Completaí`,
+    friendSubject: (nome) => `${nome} te convidou pro Álbum Completo`,
+    groupSubject: (nome, grupo) => `${nome} te convidou pro grupo "${grupo}" no Álbum Completo`,
     friendMessage: (nome, url) =>
-      `Oi! Sou ${nome}. Bora trocar figurinhas da Copa 2026 no Completaí?\n\n` +
+      `Oi! Sou ${nome}. Bora trocar figurinhas da Copa 2026 no Álbum Completo?\n\n` +
       `É de graça: você cadastra suas repetidas e faltantes e o site cruza as trocas com as minhas.\n\n` +
       `Aceita meu convite por aqui:\n${url}`,
     groupMessage: (nome, grupo, url) =>
-      `Oi! Sou ${nome}. Criei o grupo "${grupo}" no Completaí pra trocar figurinhas da Copa 2026.\n\n` +
+      `Oi! Sou ${nome}. Criei o grupo "${grupo}" no Álbum Completo pra trocar figurinhas da Copa 2026.\n\n` +
       `Entra pelo link, cadastra suas repetidas e faltantes, e o site cruza as trocas entre todo mundo do grupo:\n${url}`,
   },
 
@@ -291,7 +291,7 @@ window.C = {
     msgPlaceholder: 'Descreva o bug, em qual tela, o que esperava…',
     cancel: 'Cancelar',
     send: 'Enviar',
-    emailSubject: 'Bug report — Completa Aí',
+    emailSubject: 'Bug report — Álbum Completo',
     needMsg: 'Descreva o bug.',
     opening: 'Abrindo seu e-mail… 📧',
     to: 'f.drudi@gmail.com',      // e-mail que recebe os reports
