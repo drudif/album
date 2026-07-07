@@ -311,6 +311,16 @@ function renderSections(filter) {
     let selCount = 0;
     for (const s of sec.stickers) if (state.edit.has(s.code) || state.legends.has(s.code)) selCount++;
 
+    // LEGENDS: categoria própria (divisória + coleção), separada dos grupos.
+    if (sec.kind === 'legends') {
+      html += `<div class="group-head legends-head">${sec.flag || '👑'} ${esc(sec.title)}
+          <span class="gh-count">${selCount}/${sec.stickers.length}</span></div>
+        <div class="legend-note">${esc(C.profile.legends.hint)}</div>
+        <div class="legends-grid">${matches.map(legendCard).join('')}</div>`;
+      lastGroup = null;
+      continue;
+    }
+
     // Reproducao da pagina do album: spread de duas paginas (4 colunas cada),
     // com posicoes fixas por numero — escudo(01) no topo, elenco(13) etc.
     // [linha, coluna] dentro de cada pagina (esquerda 1-10, direita 11-20).
@@ -324,11 +334,7 @@ function renderSections(filter) {
       18: [3, 2], 19: [3, 3], 20: [3, 4],
     };
     let body;
-    if (sec.kind === 'legends') {
-      // Coleção: marcar só a cor que você tem de cada craque (sem troca).
-      body = `<div class="legend-note">${esc(C.profile.legends.hint)}</div>
-        <div class="legends-grid">${matches.map(legendCard).join('')}</div>`;
-    } else if (sec.group && !filter) {
+    if (sec.group && !filter) {
       const left = matches.filter((s) => numOf(s.code) <= 10);
       const right = matches.filter((s) => numOf(s.code) > 10);
       const cell = (s) => { const p = POS[numOf(s.code)]; return stickerRow(s, p ? { r: p[0], c: p[1] } : null); };
