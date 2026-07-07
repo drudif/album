@@ -3,7 +3,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import path from 'path';
 import { query, rows, first, withTx, initDb } from './db.js';
-import { catalog } from './catalog.js';
+import { catalog, LEGEND_TIERS, LEGEND_CODES } from './catalog.js';
 import {
   hashPassword, verifyPassword,
   createSession, getSessionUser, destroySession,
@@ -108,8 +108,13 @@ function getUser(id) { return first('SELECT * FROM users WHERE id = $1', [id]); 
 async function getUserStickers(userId) {
   const list = await rows('SELECT code, status FROM user_stickers WHERE user_id = $1', [userId]);
   const missing = [], duplicates = [];
-  for (const r of list) (r.status === 'missing' ? missing : duplicates).push(r.code);
-  return { missing, duplicates };
+  const legends = {}; // code -> cor (roxa/bronze/prata/dourada)
+  for (const r of list) {
+    if (r.status === 'missing') missing.push(r.code);
+    else if (r.status === 'duplicate') duplicates.push(r.code);
+    else legends[r.code] = r.status; // legends: status guarda a cor
+  }
+  return { missing, duplicates, legends };
 }
 function decorate(codes) {
   return codes.map((c) => catalog.byCode.get(c)).filter(Boolean).sort((a, b) => a.code.localeCompare(b.code));
@@ -145,6 +150,7 @@ async function crossWith(meId, otherIds) {
   );
   const byUser = new Map();
   for (const r of all) {
+    if (r.status !== 'duplicate' && r.status !== 'missing') continue; // ignora legends (cor)
     let e = byUser.get(r.user_id);
     if (!e) { e = { dup: new Set(), miss: new Set() }; byUser.set(r.user_id, e); }
     (r.status === 'duplicate' ? e.dup : e.miss).add(r.code);
@@ -310,8 +316,8 @@ app.get('/api/users/:id', requireAuth, h(async (req, res) => {
   }
   const target = id === req.user.id ? req.user : await getUser(id);
   if (!target) return res.status(404).json({ error: 'Usuário não encontrado.' });
-  const { missing, duplicates } = await getUserStickers(id);
-  res.json({ user: publicUser(target, target.id === req.user.id), missing: decorate(missing), duplicates: decorate(duplicates) });
+  const { missing, duplicates, legends } = await getUserStickers(id);
+  res.json({ user: publicUser(target, target.id === req.user.id), missing: decorate(missing), duplicates: decorate(duplicates), legends });
 }));
 
 app.put('/api/users/:id/stickers', requireAuth, h(async (req, res) => {
@@ -320,11 +326,24 @@ app.put('/api/users/:id/stickers', requireAuth, h(async (req, res) => {
 
   const missing = Array.isArray(req.body.missing) ? req.body.missing : [];
   const duplicates = Array.isArray(req.body.duplicates) ? req.body.duplicates : [];
-  const dupSet = new Set(duplicates.filter((c) => catalog.byCode.has(c)));
-  const missSet = new Set(missing.filter((c) => catalog.byCode.has(c) && !dupSet.has(c)));
+  // Trocas: só figurinhas normais (legends nunca entram como missing/duplicate).
+  const valid = (c) => catalog.byCode.has(c) && !LEGEND_CODES.has(c);
+  const dupSet = new Set(duplicates.filter(valid));
+  const missSet = new Set(missing.filter((c) => valid(c) && !dupSet.has(c)));
 
-  const codes = [...missSet, ...dupSet];
-  const statuses = [...missSet].map(() => 'missing').concat([...dupSet].map(() => 'duplicate'));
+  // Legends: { code -> cor }. Guarda a cor de cada craque que a pessoa tem.
+  const legendsIn = (req.body.legends && typeof req.body.legends === 'object') ? req.body.legends : {};
+  const legendCodes = [], legendStatuses = [];
+  for (const [code, tier] of Object.entries(legendsIn)) {
+    if (LEGEND_CODES.has(code) && LEGEND_TIERS.includes(tier)) {
+      legendCodes.push(code); legendStatuses.push(tier);
+    }
+  }
+
+  const codes = [...missSet, ...dupSet, ...legendCodes];
+  const statuses = [...missSet].map(() => 'missing')
+    .concat([...dupSet].map(() => 'duplicate'))
+    .concat(legendStatuses);
   await withTx(async (client) => {
     await client.query('DELETE FROM user_stickers WHERE user_id = $1', [id]);
     if (codes.length) {
@@ -335,7 +354,9 @@ app.put('/api/users/:id/stickers', requireAuth, h(async (req, res) => {
       );
     }
   });
-  res.json({ missing: decorate([...missSet]), duplicates: decorate([...dupSet]) });
+  const legendsOut = {};
+  legendCodes.forEach((c, i) => (legendsOut[c] = legendStatuses[i]));
+  res.json({ missing: decorate([...missSet]), duplicates: decorate([...dupSet]), legends: legendsOut });
 }));
 
 // ---------- amizades (convite por link + aceite) ----------

@@ -152,23 +152,6 @@ export function buildCatalog() {
   const stickers = [];
   const sections = [];
 
-  // Secao LEGENDS (LEG) — craques em destaque, primeira do album
-  const legendStickers = LEGENDS.map((label, i) => ({
-    code: `LEG${pad(i + 1)}`,
-    label,
-    section: 'Legends',
-    sectionId: 'LEG',
-    team: null,
-  }));
-  stickers.push(...legendStickers);
-  sections.push({
-    id: 'LEG',
-    title: 'Legends',
-    flag: '👑',
-    group: null,
-    stickers: legendStickers,
-  });
-
   // Secao especiais (FWC)
   const specialStickers = SPECIALS.map((label, i) => ({
     code: `FWC${pad(i + 1)}`,
@@ -234,8 +217,34 @@ export function buildCatalog() {
     });
   }
 
+  // Secao LEGENDS (LEG) — coleção no FINAL do álbum. Não entra em trocas:
+  // aqui a pessoa só marca quais craques tem e em qual cor (kind: 'legends').
+  const legendStickers = LEGENDS.map((label, i) => ({
+    code: `LEG${pad(i + 1)}`,
+    label,
+    section: 'Legends',
+    sectionId: 'LEG',
+    team: null,
+    legend: true,
+  }));
+  stickers.push(...legendStickers);
+  sections.push({
+    id: 'LEG',
+    title: 'Legends',
+    flag: '👑',
+    group: null,
+    kind: 'legends',
+    stickers: legendStickers,
+  });
+
   const byCode = new Map(stickers.map((s) => [s.code, s]));
   return { stickers, sections, byCode, teams: TEAMS };
 }
+
+// Cores possíveis das legends e conjunto de códigos (para validação no servidor).
+export const LEGEND_TIERS = ['roxa', 'bronze', 'prata', 'dourada'];
+export const LEGEND_CODES = new Set(
+  LEGENDS.map((_, i) => `LEG${String(i + 1).padStart(2, '0')}`)
+);
 
 export const catalog = buildCatalog();
