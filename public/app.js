@@ -230,16 +230,33 @@ async function renderProfile() {
     <div class="card">
       <h2>${esc(P.title)}</h2>
       <div class="sub">${P.sub}</div>
-      <div class="stats" id="profileStats"></div>
-      <div class="legend">
-        <span><span class="dot get"></span>${esc(P.legendMissing)}</span>
-        <span><span class="dot give"></span>${esc(P.legendDuplicate)}</span>
-      </div>
-      <div class="editor-toolbar">
-        <input id="filterInput" placeholder="${esc(P.filterPlaceholder)}" />
-        <button class="sec" id="expandAll">${esc(P.expandAll)}</button>
-        <button class="sec" id="collapseAll">${esc(P.collapseAll)}</button>
-        <button class="sec" id="exportBtn">${esc(P.exportBtn)}</button>
+      <div class="profile-top">
+        <div class="profile-lead">
+          <div class="stats" id="profileStats"></div>
+          <div class="legend">
+            <span><span class="dot get"></span>${esc(P.legendMissing)}</span>
+            <span><span class="dot give"></span>${esc(P.legendDuplicate)}</span>
+          </div>
+          <div class="editor-toolbar">
+            <input id="filterInput" placeholder="${esc(P.filterPlaceholder)}" />
+            <button class="sec" id="expandAll">${esc(P.expandAll)}</button>
+            <button class="sec" id="collapseAll">${esc(P.collapseAll)}</button>
+            <button class="sec" id="exportBtn">${esc(P.exportBtn)}</button>
+          </div>
+        </div>
+        <aside class="next-steps">
+          <h3>${esc(P.nextTitle)}</h3>
+          <div class="ns-item">
+            <b>${esc(P.nextInviteLabel)}</b>
+            <span>${esc(P.nextInviteDesc)}</span>
+            <button class="ns-link" data-go="friends">${esc(P.nextInviteLink)} →</button>
+          </div>
+          <div class="ns-item">
+            <b>${esc(P.nextGroupLabel)}</b>
+            <span>${esc(P.nextGroupDesc)}</span>
+            <button class="ns-link" data-go="groups">${esc(P.nextGroupLink)} →</button>
+          </div>
+        </aside>
       </div>
       <div id="sections"></div>
       <div class="savebar">
@@ -258,6 +275,7 @@ async function renderProfile() {
   $('#saveBtn').onclick = saveAlbum;
   $('#resetBtn').onclick = () => renderProfile();
   $('#exportBtn').onclick = exportCard;
+  app.querySelectorAll('.ns-link[data-go]').forEach((b) => (b.onclick = () => go(b.dataset.go)));
 }
 
 function updateProfileStats() {
