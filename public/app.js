@@ -364,7 +364,8 @@ const STICKER_ICONS = {
 function stickerIcon(s, num) {
   let type = 'bust';
   let shine = false;
-  if (s.sectionId === 'FWC') { type = 'star'; shine = true; }
+  if (s.sectionId === 'LEG') { type = 'bust'; shine = true; } // craques: jogador com brilho
+  else if (s.sectionId === 'FWC') { type = 'star'; shine = true; }
   else if (s.sectionId === 'CC') { type = 'bust'; }
   else if (s.team) {
     if (num === 1) { type = 'crest'; shine = true; }

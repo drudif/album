@@ -12,6 +12,31 @@
 
 const PLAYERS_PER_TEAM = 18; // + escudo + elenco = 20 figurinhas por selecao
 
+// Secao LEGENDS (codigo LEG01..LEG20) — craques em destaque, acima das especiais.
+// Nao sao numeradas por posicao: cada figurinha e um jogador (nome + pais).
+const LEGENDS = [
+  'Achraf Hakimi (Marrocos)',
+  'Alphonso Davies (Canadá)',
+  'Cody Gakpo (Holanda)',
+  'Christian Pulisic (Estados Unidos)',
+  'Cristiano Ronaldo (Portugal)',
+  'Erling Haaland (Noruega)',
+  'Federico Valverde (Uruguai)',
+  'Florian Wirtz (Alemanha)',
+  'Jérémy Doku (Bélgica)',
+  'Jude Bellingham (Inglaterra)',
+  'Kylian Mbappé (França)',
+  'Lamine Yamal (Espanha)',
+  'Lionel Messi (Argentina)',
+  'Luis Díaz (Colômbia)',
+  'Luka Modrić (Croácia)',
+  'Mohamed Salah (Egito)',
+  'Moisés Caicedo (Equador)',
+  'Raúl Jiménez (México)',
+  'Son Heung-min (Coreia do Sul)',
+  'Vinícius Júnior (Brasil)',
+];
+
 // Secao de abertura / especiais (codigo FWC01..FWC19)
 const SPECIALS = [
   'Logo oficial da Copa 2026',
@@ -126,6 +151,23 @@ function pad(n) {
 export function buildCatalog() {
   const stickers = [];
   const sections = [];
+
+  // Secao LEGENDS (LEG) — craques em destaque, primeira do album
+  const legendStickers = LEGENDS.map((label, i) => ({
+    code: `LEG${pad(i + 1)}`,
+    label,
+    section: 'Legends',
+    sectionId: 'LEG',
+    team: null,
+  }));
+  stickers.push(...legendStickers);
+  sections.push({
+    id: 'LEG',
+    title: 'Legends',
+    flag: '👑',
+    group: null,
+    stickers: legendStickers,
+  });
 
   // Secao especiais (FWC)
   const specialStickers = SPECIALS.map((label, i) => ({
