@@ -229,9 +229,9 @@ async function renderProfile() {
   app.innerHTML = `
     <div class="card">
       <h2>${esc(P.title)}</h2>
-      <div class="sub">${P.sub}</div>
       <div class="profile-top">
         <div class="profile-lead">
+          <div class="sub">${P.sub}</div>
           <div class="stats" id="profileStats"></div>
           <div class="legend">
             <span><span class="dot get"></span>${esc(P.legendMissing)}</span>
@@ -239,8 +239,6 @@ async function renderProfile() {
           </div>
           <div class="editor-toolbar">
             <input id="filterInput" placeholder="${esc(P.filterPlaceholder)}" />
-            <button class="sec" id="expandAll">${esc(P.expandAll)}</button>
-            <button class="sec" id="collapseAll">${esc(P.collapseAll)}</button>
             <button class="sec" id="exportBtn">${esc(P.exportBtn)}</button>
           </div>
         </div>
@@ -270,8 +268,6 @@ async function renderProfile() {
   updateProfileStats();
 
   $('#filterInput').oninput = (e) => renderSections(e.target.value.trim().toLowerCase());
-  $('#expandAll').onclick = () => document.querySelectorAll('#sections .section').forEach((d) => (d.open = true));
-  $('#collapseAll').onclick = () => document.querySelectorAll('#sections .section').forEach((d) => (d.open = false));
   $('#saveBtn').onclick = saveAlbum;
   $('#resetBtn').onclick = () => renderProfile();
   $('#exportBtn').onclick = exportCard;
@@ -444,16 +440,17 @@ async function exportCard() {
   miss.sort((a, b) => a.localeCompare(b));
   dup.sort((a, b) => a.localeCompare(b));
 
-  const INK = '#09090b', PAPER = '#f8f4e8', ACID = '#d2e823', MUT = '#5c5c52';
+  const INK = '#09090b', PAPER = '#f8f4e8', ACID = '#2dd4bf', MUT = '#5c5c52';
   const W = 1080, H = 1350;
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   const ctx = cv.getContext('2d');
 
-  // garante fontes carregadas antes de desenhar
+  // garante as fontes do app carregadas antes de desenhar (Bricolage p/ display)
   try {
     await Promise.all([
-      document.fonts.load('400 96px "Dela Gothic One"'),
+      document.fonts.load('800 92px "Bricolage Grotesque"'),
+      document.fonts.load('800 64px "Bricolage Grotesque"'),
       document.fonts.load('700 28px "Space Grotesk"'),
       document.fonts.load('500 26px "Space Grotesk"'),
     ]);
@@ -487,24 +484,24 @@ async function exportCard() {
   ctx.fillText(X.badge, M + 24, 64 + 29);
 
   // titulo
-  ctx.textBaseline = 'alphabetic'; ctx.fillStyle = INK; ctx.font = '400 92px "Dela Gothic One"';
+  ctx.textBaseline = 'alphabetic'; ctx.fillStyle = INK; ctx.font = '800 92px "Bricolage Grotesque"';
   ctx.fillText(X.titleLine1, M, 232);
   ctx.fillText(X.titleLine2, M, 232 + 90);
 
   // usuario
   ctx.font = '700 30px "Space Grotesk"';
-  ctx.fillText(`${(state.user.name || '').toUpperCase()} · APTO ${(state.user.apartment || '').toUpperCase()}`, M, 232 + 90 + 56);
+  ctx.fillText(`${(state.user.name || '').toUpperCase()}`, M, 232 + 90 + 56);
 
   // caixas de contagem
   const boxW = (W - M * 2 - 24) / 2, boxY = 470, boxH = 130;
   block(M, boxY, boxW, boxH, 12, ACID);
   block(M + boxW + 24, boxY, boxW, boxH, 12, INK);
   ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = INK; ctx.font = '400 64px "Dela Gothic One"';
+  ctx.fillStyle = INK; ctx.font = '800 64px "Bricolage Grotesque"';
   ctx.fillText(String(miss.length), M + 26, boxY + 78);
   ctx.font = '700 22px "Space Grotesk"'; ctx.fillStyle = INK;
   ctx.fillText(X.boxMissing, M + 26, boxY + 108);
-  ctx.fillStyle = ACID; ctx.font = '400 64px "Dela Gothic One"';
+  ctx.fillStyle = ACID; ctx.font = '800 64px "Bricolage Grotesque"';
   ctx.fillText(String(dup.length), M + boxW + 24 + 26, boxY + 78);
   ctx.font = '700 22px "Space Grotesk"';
   ctx.fillText(X.boxDuplicates, M + boxW + 24 + 26, boxY + 108);
@@ -556,23 +553,83 @@ async function exportCard() {
   ctx.fillStyle = MUT; ctx.font = '500 22px "Space Grotesk"'; ctx.textBaseline = 'middle';
   ctx.fillText(X.footer, M, H - 58);
 
-  // exporta / compartilha
-  cv.toBlob(async (blob) => {
-    if (!blob) { toast(X.genError, true); return; }
-    const file = new File([blob], X.fileName, { type: 'image/png' });
-    try {
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({ files: [file], title: X.shareTitle, text: X.shareText });
-        return;
-      }
-    } catch (e) { /* cai pro download */ }
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = X.fileName;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-    toast(X.done);
-  }, 'image/png');
+  // abre o modal com a imagem + o texto pronto pra copiar (WhatsApp)
+  openWhatsappModal(cv, buildWhatsappText());
+}
+
+// Monta o texto (WhatsApp) das faltantes e repetidas, agrupado por seleção
+// com o emoji da bandeira de cada uma.
+function buildWhatsappText() {
+  const W = C.whatsapp;
+  const missLines = [], dupLines = [];
+  let missCount = 0, dupCount = 0;
+  for (const sec of state.catalog.sections) {
+    const flag = sec.flag || '⚽';
+    const miss = [], dup = [];
+    for (const s of sec.stickers) {
+      const st = state.edit.get(s.code);
+      if (st === 'missing') miss.push(s.code);
+      else if (st === 'duplicate') dup.push(s.code);
+    }
+    if (miss.length) { missLines.push(`${flag} ${miss.join(', ')}`); missCount += miss.length; }
+    if (dup.length) { dupLines.push(`${flag} ${dup.join(', ')}`); dupCount += dup.length; }
+  }
+  const lines = [W.textHeader];
+  if (state.user && state.user.name) lines.push(state.user.name);
+  lines.push('', W.textMissing(missCount), missCount ? missLines.join('\n') : W.textNothingMissing);
+  lines.push('', W.textDuplicates(dupCount), dupCount ? dupLines.join('\n') : W.textNothingDup);
+  lines.push('', W.textFooter(location.origin));
+  return lines.join('\n');
+}
+
+// Modal da "Versão WhatsApp": prévia da imagem + texto copiável + baixar/compartilhar.
+function openWhatsappModal(cv, text) {
+  const W = C.whatsapp, X = C.exportCard;
+  const wrap = document.createElement('div');
+  wrap.className = 'lightbox';
+  wrap.innerHTML = `
+    <div class="lb-card wa-card">
+      <h2>${esc(W.title)}</h2>
+      <div class="sub">${esc(W.sub)}</div>
+      <div class="wa-grid">
+        <img class="wa-img" alt="prévia do card" src="${cv.toDataURL('image/png')}" />
+        <div class="wa-textwrap">
+          <textarea id="waText" rows="12" readonly>${esc(text)}</textarea>
+          <button id="waCopy" class="ns-link" type="button">${esc(W.copyText)}</button>
+        </div>
+      </div>
+      <div class="lb-actions">
+        <button class="ghost" type="button" id="waClose">${esc(W.close)}</button>
+        <button type="button" id="waImg">${esc(W.downloadImg)}</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+  const close = () => wrap.remove();
+  wrap.onclick = (e) => { if (e.target === wrap) close(); };
+  wrap.querySelector('#waClose').onclick = close;
+  wrap.querySelector('#waCopy').onclick = async () => {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const t = wrap.querySelector('#waText'); t.select(); document.execCommand('copy'); }
+    toast(W.copied);
+  };
+  wrap.querySelector('#waImg').onclick = () => {
+    cv.toBlob(async (blob) => {
+      if (!blob) { toast(X.genError, true); return; }
+      const file = new File([blob], X.fileName, { type: 'image/png' });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: X.shareTitle, text: X.shareText });
+          return;
+        }
+      } catch (e) { /* cai pro download */ }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = X.fileName;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      toast(X.done);
+    }, 'image/png');
+  };
 }
 
 // ====== Amigos (convite por link + aceite) ======
