@@ -593,7 +593,10 @@ function openWhatsappModal(cv, text) {
       <h2>${esc(W.title)}</h2>
       <div class="sub">${esc(W.sub)}</div>
       <div class="wa-grid">
-        <img class="wa-img" alt="prévia do card" src="${cv.toDataURL('image/png')}" />
+        <div class="wa-imgcol">
+          <img class="wa-img" alt="prévia do card" src="${cv.toDataURL('image/png')}" />
+          <button type="button" id="waImg" class="wa-dl">${esc(W.downloadImg)}</button>
+        </div>
         <div class="wa-textwrap">
           <textarea id="waText" rows="12" readonly>${esc(text)}</textarea>
           <button id="waCopy" class="ns-link" type="button">${esc(W.copyText)}</button>
@@ -601,7 +604,6 @@ function openWhatsappModal(cv, text) {
       </div>
       <div class="lb-actions">
         <button class="ghost" type="button" id="waClose">${esc(W.close)}</button>
-        <button type="button" id="waImg">${esc(W.downloadImg)}</button>
       </div>
     </div>`;
   document.body.appendChild(wrap);
