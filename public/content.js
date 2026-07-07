@@ -124,13 +124,13 @@ window.C = {
   profile: {
     title: 'Meu Álbum — Copa 2026',
     sub: 'Marque o que <b style="color:var(--get)">falta</b> (quero) e o que está ' +
-         '<b style="color:var(--give)">repetida</b> (tenho de sobra). Use a busca para achar rápido.',
+         '<b style="color:var(--give)">repetida</b> (tenho de sobra).<br/>Use a busca para achar rápido.',
     legendMissing: 'Falta — preciso desta',
     legendDuplicate: 'Repetida — tenho pra trocar',
     filterPlaceholder: '🔎 Filtrar por código ou país (ex.: BRA, 07, Argentina)',
     expandAll: 'Expandir tudo',
     collapseAll: 'Recolher',
-    exportBtn: '📤 Exportar meu álbum',
+    exportBtn: '📱 Versão WhatsApp',
     undo: 'Desfazer',
     save: 'Salvar álbum',
     dirtyUnsaved: 'Alterações não salvas…',
@@ -309,18 +309,35 @@ window.C = {
   exportCard: {
     badge: '⚽  COPA 2026 · MEU ÁLBUM',
     titleLine1: 'ÁLBUM',
-    titleLine2: 'DA COPA',
+    titleLine2: 'COMPLETO',
     boxMissing: 'FALTAM (QUERO)',
     boxDuplicates: 'REPETIDAS (TROCO)',
     listMissing: '🎯 FALTAM',
     listDuplicates: '🔁 REPETIDAS',
     nothingMarked: '— nada marcado —',
-    footer: 'powered by claude code · made by fernando drudi',
-    shareTitle: 'Meu Álbum da Copa',
+    footer: 'album-completo.com · made by fernando drudi',
+    shareTitle: 'Meu Álbum Completo',
     shareText: 'Minhas figurinhas: faltantes e repetidas 🔁',
     genError: 'Não consegui gerar o card.',
-    done: 'Card exportado! 📤',
-    fileName: 'meu-album-copa-2026.png',
+    done: 'Imagem pronta! 📤',
+    fileName: 'meu-album-completo.png',
+  },
+
+  /* ---- Versão WhatsApp (modal: imagem + texto pronto) ---- */
+  whatsapp: {
+    title: 'Versão WhatsApp',
+    sub: 'Copie o texto pra mandar no grupo, ou baixe/compartilhe a imagem.',
+    copyText: '📋 Copiar texto',
+    copied: 'Texto copiado! 📋',
+    downloadImg: '⬇️ Baixar imagem',
+    close: 'Fechar',
+    // texto gerado (${n} = quantidade, ${url} = endereço do site)
+    textHeader: '🏆 MEU ÁLBUM COMPLETO — COPA 2026',
+    textMissing: (n) => `🎯 FALTAM (${n}):`,
+    textDuplicates: (n) => `🔁 REPETIDAS PRA TROCAR (${n}):`,
+    textNothingMissing: '✅ Nada faltando!',
+    textNothingDup: '— nenhuma repetida —',
+    textFooter: (url) => `Bora trocar? Faça o seu em ${url}`,
   },
 
   /* ---- Painel de admin (só quem é admin vê) ---- */
