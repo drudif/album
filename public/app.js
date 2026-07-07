@@ -4,6 +4,7 @@ const state = {
   catalog: null,     // { sections, total }
   byCode: new Map(), // code -> sticker
   edit: new Map(),   // code -> 'missing' | 'duplicate' (rascunho do editor)
+  legends: new Map(),// code -> cor da legend (roxa/bronze/prata/dourada)
   dirty: false,
 };
 
@@ -224,6 +225,7 @@ async function renderProfile() {
   state.edit = new Map();
   for (const s of data.missing) state.edit.set(s.code, 'missing');
   for (const s of data.duplicates) state.edit.set(s.code, 'duplicate');
+  state.legends = new Map(Object.entries(data.legends || {}));
   state.dirty = false;
 
   app.innerHTML = `
@@ -307,7 +309,7 @@ function renderSections(filter) {
     }
     const open = filter ? 'open' : '';
     let selCount = 0;
-    for (const s of sec.stickers) if (state.edit.has(s.code)) selCount++;
+    for (const s of sec.stickers) if (state.edit.has(s.code) || state.legends.has(s.code)) selCount++;
 
     // Reproducao da pagina do album: spread de duas paginas (4 colunas cada),
     // com posicoes fixas por numero — escudo(01) no topo, elenco(13) etc.
@@ -322,7 +324,11 @@ function renderSections(filter) {
       18: [3, 2], 19: [3, 3], 20: [3, 4],
     };
     let body;
-    if (sec.group && !filter) {
+    if (sec.kind === 'legends') {
+      // Coleção: marcar só a cor que você tem de cada craque (sem troca).
+      body = `<div class="legend-note">${esc(C.profile.legends.hint)}</div>
+        <div class="legends-grid">${matches.map(legendCard).join('')}</div>`;
+    } else if (sec.group && !filter) {
       const left = matches.filter((s) => numOf(s.code) <= 10);
       const right = matches.filter((s) => numOf(s.code) > 10);
       const cell = (s) => { const p = POS[numOf(s.code)]; return stickerRow(s, p ? { r: p[0], c: p[1] } : null); };
@@ -350,7 +356,43 @@ function renderSections(filter) {
   wrap.querySelectorAll('.toggles button').forEach((btn) => {
     btn.onclick = () => toggleSticker(btn.dataset.code, btn.dataset.kind);
   });
+  wrap.querySelectorAll('.tier[data-legend]').forEach((btn) => {
+    btn.onclick = () => setLegendTier(btn.dataset.legend, btn.dataset.tier);
+  });
 }
+
+// Card de legend: nome do craque + 4 cores. Clique escolhe a cor que você tem
+// (clicar de novo na mesma desmarca). Não entra em trocas.
+function legendCard(s) {
+  const cur = state.legends.get(s.code);
+  const T = C.profile.legends.tiers;
+  const dots = LEGEND_TIERS.map((t) =>
+    `<button type="button" class="tier tier-${t}${cur === t ? ' on' : ''}" data-legend="${s.code}" data-tier="${t}" title="${esc(T[t])}" aria-label="${esc(T[t])}"></button>`
+  ).join('');
+  return `
+    <div class="legend-card${cur ? ' has' : ''}" data-code="${s.code}">
+      <div class="lc-name">${esc(s.label)}</div>
+      <div class="lc-tiers">${dots}</div>
+    </div>`;
+}
+
+function setLegendTier(code, tier) {
+  const cur = state.legends.get(code);
+  if (cur === tier) state.legends.delete(code); // clicar de novo desmarca
+  else state.legends.set(code, tier);
+  state.dirty = true;
+
+  const card = document.querySelector(`.legend-card[data-code="${code}"]`);
+  if (card) {
+    const now = state.legends.get(code);
+    card.classList.toggle('has', !!now);
+    card.querySelectorAll('.tier').forEach((b) => b.classList.toggle('on', b.dataset.tier === now));
+  }
+  updateProfileStats();
+}
+
+// Cores das legends (mesma lista do catálogo/servidor).
+const LEGEND_TIERS = ['roxa', 'bronze', 'prata', 'dourada'];
 
 // Icones minimalistas (mesmo estilo de traco do app) por tipo de figurinha.
 const STICKER_ICONS = {
@@ -419,10 +461,11 @@ function toggleSticker(code, kind) {
 async function saveAlbum() {
   const missing = [], duplicates = [];
   for (const [code, st] of state.edit) (st === 'missing' ? missing : duplicates).push(code);
+  const legends = Object.fromEntries(state.legends);
   try {
     await api(`/api/users/${state.user.id}/stickers`, {
       method: 'PUT',
-      body: { missing, duplicates },
+      body: { missing, duplicates, legends },
     });
     state.dirty = false;
     updateProfileStats();

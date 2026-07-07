@@ -59,7 +59,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS user_stickers (
       user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
       code     TEXT NOT NULL,
-      status   TEXT NOT NULL CHECK (status IN ('missing', 'duplicate')),
+      status   TEXT NOT NULL,
       PRIMARY KEY (user_id, code)
     );
 
@@ -115,4 +115,7 @@ export async function initDb() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS google_id TEXT;`);
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id) WHERE google_id IS NOT NULL;`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT false;`);
+  // status agora também guarda a cor das legends (roxa/bronze/prata/dourada),
+  // então a checagem antiga de dois valores sai.
+  await pool.query(`ALTER TABLE user_stickers DROP CONSTRAINT IF EXISTS user_stickers_status_check;`);
 }

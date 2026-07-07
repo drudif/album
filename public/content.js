@@ -156,6 +156,11 @@ window.C = {
     nextGroupLabel: 'Crie grupos',
     nextGroupDesc: 'todos os membros de um grupo cruzam seus álbuns.',
     nextGroupLink: 'crie seu grupo',
+    // seção LEGENDS (coleção, no fim do álbum — não entra em trocas)
+    legends: {
+      hint: 'Estas não entram em trocas. Marque a cor da versão que você tem (toque de novo pra desmarcar).',
+      tiers: { roxa: 'Roxa', bronze: 'Bronze', prata: 'Prata', dourada: 'Dourada' },
+    },
   },
 
   /* ---- Amigos ---- */
