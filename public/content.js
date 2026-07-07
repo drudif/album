@@ -148,6 +148,14 @@ window.C = {
     sectionCount: (marcadas, total) =>
       `${marcadas ? marcadas + ' marcadas · ' : ''}${total} fig.`,
     unsavedLeave: 'Você tem alterações não salvas no seu álbum. Sair mesmo assim?',
+    // destaque "próximos passos" (ao lado do editor)
+    nextTitle: 'Depois de salvar seu álbum:',
+    nextInviteLabel: 'Convide amigos',
+    nextInviteDesc: 'gere um link de convite, envie e veja o match acontecer.',
+    nextInviteLink: 'convide agora',
+    nextGroupLabel: 'Crie grupos',
+    nextGroupDesc: 'todos os membros de um grupo cruzam seus álbuns.',
+    nextGroupLink: 'crie seu grupo',
   },
 
   /* ---- Amigos ---- */
