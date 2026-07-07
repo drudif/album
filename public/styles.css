@@ -211,6 +211,9 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
 /* topo do perfil: editor (esquerda) + destaque "próximos passos" (direita) */
 .profile-top { display: grid; grid-template-columns: 1fr minmax(240px, 320px); gap: clamp(18px, 3vw, 36px); align-items: start; margin-bottom: 8px; }
 .profile-top > * { min-width: 0; }
+/* no desktop, sobe o box (coluna esquerda fica no topo) até sobrar folga igual
+   acima e abaixo dele em relação ao conteúdo da esquerda. */
+@media (min-width: 821px) { .next-steps { margin-top: -44px; } }
 @media (max-width: 820px) { .profile-top { grid-template-columns: 1fr; } }
 
 .next-steps {
