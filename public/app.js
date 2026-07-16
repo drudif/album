@@ -103,7 +103,6 @@ function loadTurnstile() {
 // ====== Tela de login / cadastro ======
 function renderAuth() {
   const h = C.home;
-  const marq = h.marquee.map((s) => `<span>${esc(s)}</span>`).join('');
   app.innerHTML = `
     <div id="inviteBanner"></div>
     <div class="auth-grid">
@@ -112,7 +111,6 @@ function renderAuth() {
       <h1 class="glitch" data-text="${esc(h.titleFull)}">${esc(h.titleLine1)}<br/>${esc(h.titleLine2)}</h1>
       <p>${esc(h.description)}</p>
       <div class="credit">${creditHtml()}</div>
-      <div class="marquee" aria-hidden="true"><div>${marq}${marq}</div></div>
     </div>
     <div class="card auth-card">
       <div class="tabs">
