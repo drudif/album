@@ -9,12 +9,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400..800&family=Space+Grotesk:wght@400;500;600;700&display=swap" />
   <link rel="stylesheet" href="styles.css" />
-  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚽</text></svg>" />
 </head>
 <body>
-  <div id="cursor" class="cursor" aria-hidden="true"></div>
-
   <header class="topbar">
     <div class="brand">
       <span class="ball" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#09090b" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2.5"/><circle cx="12" cy="9.4" r="2.6"/><path d="M7 18c.5-2.6 2.5-4.2 5-4.2s4.5 1.6 5 4.2"/></svg></span>
@@ -41,24 +38,7 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="content.js"></script>
-  <script src="app.js"></script>
-  <script>
-    // Cursor custom (circulo mix-blend-difference, smooth follow) — so em ponteiro fino.
-    (function () {
-      if (!window.matchMedia || !matchMedia('(pointer:fine)').matches) return;
-      const c = document.getElementById('cursor');
-      if (!c) return;
-      c.style.display = 'block';
-      let lx = 0, ly = 0, big = false;
-      const render = () => { c.style.transform = `translate(${lx - 16}px, ${ly - 16}px) scale(${big ? 2.5 : 1})`; };
-      // segue o mouse 1:1, sem easing/delay
-      addEventListener('mousemove', (e) => { lx = e.clientX; ly = e.clientY; render(); });
-      document.addEventListener('mouseover', (e) => {
-        big = !!(e.target.closest && e.target.closest('a, button, summary, .sticker'));
-        render();
-      });
-    })();
-  </script>
+  <script src="content.js" defer></script>
+  <script src="app.js" defer></script>
 </body>
 </html>
