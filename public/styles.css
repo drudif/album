@@ -45,19 +45,6 @@ body {
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
 }
-/* overlay de ruido global ~3% */
-body::after {
-  content: ''; position: fixed; inset: 0; z-index: 9998; pointer-events: none; opacity: .03;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-}
-
-/* cursor custom — só na home (some depois do login) */
-.cursor {
-  display: none; position: fixed; top: 0; left: 0; width: 32px; height: 32px;
-  border-radius: 100%; background: #fff; mix-blend-mode: difference;
-  pointer-events: none; z-index: 9999; will-change: transform;
-}
-body.logged-in .cursor { display: none !important; }
 
 h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: -0.03em; }
 
@@ -110,8 +97,7 @@ input:focus { outline: none; box-shadow: var(--shadow); transform: translate(-1p
   position: sticky; top: 16px; z-index: 50;
   max-width: 1100px; margin: 16px auto; padding: 12px 22px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
-  background: color-mix(in srgb, var(--bg) 90%, transparent);
-  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  background: color-mix(in srgb, var(--bg) 97%, var(--ink));
   border: 2px solid var(--ink); border-radius: 12px; box-shadow: var(--shadow);
 }
 .brand { display: flex; align-items: center; gap: 12px; }

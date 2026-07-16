@@ -89,30 +89,28 @@ async function go(view, arg) {
   if (view === 'person') return renderPerson(arg);
 }
 
+// Carrega o script do Turnstile só quando precisa (na tela de login), fora do
+// caminho de primeira pintura.
+function loadTurnstile() {
+  if (window.turnstile || document.getElementById('cf-turnstile-api')) return;
+  const s = document.createElement('script');
+  s.id = 'cf-turnstile-api';
+  s.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+  s.async = true; s.defer = true;
+  document.head.appendChild(s);
+}
+
 // ====== Tela de login / cadastro ======
-async function renderAuth() {
+function renderAuth() {
   $('#nav').classList.add('hidden');
   document.body.classList.remove('logged-in'); // cursor custom volta só na home
-  let cfg = { turnstileSiteKey: '' };
-  try { cfg = await api('/api/config'); } catch (e) { /* segue sem */ }
-
   const h = C.home;
   const marq = h.marquee.map((s) => `<span>${esc(s)}</span>`).join('');
+  const cfg = { turnstileSiteKey: '', googleEnabled: false };
 
-  // Se a pessoa chegou por um link de convite, mostra uma faixa personalizada.
-  let bannerHtml = '';
-  const inv = getPendingInvite();
-  if (inv) {
-    try {
-      const info = await fetchInvite(inv);
-      bannerHtml = inv.kind === 'group'
-        ? `<div class="invite-banner">${h.inviteBannerGroup(esc(info.group.ownerName), esc(info.group.name))}</div>`
-        : `<div class="invite-banner">${h.inviteBannerFriend(esc(info.inviter.name))}</div>`;
-    } catch (e) { clearPendingInvite(); /* convite inválido: segue sem faixa */ }
-  }
-
+  // Pinta a home imediatamente — sem esperar rede (config/sessão vêm depois).
   app.innerHTML = `
-    ${bannerHtml}
+    <div id="inviteBanner"></div>
     <div class="auth-grid">
     <div class="hero">
       <span class="sticker-badge">${esc(h.badge)}</span>
@@ -146,10 +144,7 @@ async function renderAuth() {
         <div id="tsWidget" class="ts-widget"></div>
         <button type="submit" style="width:100%">${esc(h.submit)}</button>
       </form>
-      ${cfg.googleEnabled ? `
-      <div class="orsep"><span>${esc(h.orSeparator)}</span></div>
-      <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> ${esc(h.googleButton)}</a>
-      <div class="oauth-note">${esc(h.googleNote)}</div>` : ''}
+      <div id="googleWrap"></div>
     </div>
     </div>`;
 
@@ -178,10 +173,39 @@ async function renderAuth() {
       'expired-callback': () => { tsToken = ''; },
     });
   };
-  (function waitTs() {
-    if (window.turnstile && window.turnstile.render) mountTurnstile();
-    else setTimeout(waitTs, 200);
-  })();
+
+  // Config em 2º plano: revela o Google e carrega/monta o Turnstile só aqui.
+  api('/api/config').then((c) => {
+    if (!$('#authForm')) return; // já saiu da home (ex.: logou) — não faz nada
+    cfg.turnstileSiteKey = c.turnstileSiteKey || '';
+    cfg.googleEnabled = !!c.googleEnabled;
+    if (cfg.googleEnabled) {
+      const g = $('#googleWrap');
+      if (g) g.innerHTML = `
+        <div class="orsep"><span>${esc(h.orSeparator)}</span></div>
+        <a class="gbtn" href="/api/auth/google"><span class="gico">G</span> ${esc(h.googleButton)}</a>
+        <div class="oauth-note">${esc(h.googleNote)}</div>`;
+    }
+    if (cfg.turnstileSiteKey) {
+      loadTurnstile();
+      (function waitTs() {
+        if (window.turnstile && window.turnstile.render) mountTurnstile();
+        else setTimeout(waitTs, 200);
+      })();
+    }
+  }).catch(() => {});
+
+  // Convite pendente: injeta a faixa quando chegar (não bloqueia a home).
+  const inv = getPendingInvite();
+  if (inv) {
+    fetchInvite(inv).then((info) => {
+      const b = $('#inviteBanner');
+      if (!b) return;
+      b.innerHTML = inv.kind === 'group'
+        ? `<div class="invite-banner">${h.inviteBannerGroup(esc(info.group.ownerName), esc(info.group.name))}</div>`
+        : `<div class="invite-banner">${h.inviteBannerFriend(esc(info.inviter.name))}</div>`;
+    }).catch(() => clearPendingInvite());
+  }
 
   $('#authForm').onsubmit = async (e) => {
     e.preventDefault();
@@ -1348,14 +1372,10 @@ async function init() {
   });
   $('#logoutBtn').onclick = logout;
 
-  // Sessao vive no cookie httpOnly; /api/me decide se ja esta logado.
-  try {
-    const data = await api('/api/me');
-    state.user = data.user;
-    await boot();
-  } catch {
-    renderAuth();
-  }
+  // Pinta a home na hora (a maioria que chega está deslogada) — sem esperar rede.
+  renderAuth();
+  // Em 2º plano: se a sessão existir (cookie httpOnly), troca pro app.
+  api('/api/me').then((data) => { state.user = data.user; boot(); }).catch(() => {});
 }
 
 init();
