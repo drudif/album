@@ -46,9 +46,6 @@ window.C = {
       'Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos. ' +
       'O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.',
 
-    // faixa rolando na home (pode adicionar/remover itens da lista)
-    marquee: ['Bora completar o álbum', '1013 figurinhas', '48 seleções', 'trocas perfeitas'],
-
     tabRegister: 'Criar conta',
     tabLogin: 'Já tenho conta',
 

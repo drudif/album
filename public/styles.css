@@ -59,7 +59,6 @@ h1, h2, h3 { font-family: var(--display); font-weight: 700; letter-spacing: -0.0
   100% { transform: translate(0, 0); }
 }
 @keyframes float { 0%,100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(-2deg); } }
-@keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
 
 /* ---------- controles (hard-shadow button) ---------- */
 button {
@@ -174,11 +173,6 @@ main { max-width: 1100px; margin: 0 auto; padding: 14px 22px 100px; }
   box-shadow: var(--shadow-sm); transform: rotate(-2deg); animation: float 4s ease-in-out infinite;
 }
 
-/* marquee de destaque */
-.marquee { overflow: hidden; border: 2px solid var(--ink); border-radius: 8px; background: var(--acid); margin: 18px 0; box-shadow: var(--shadow-sm); }
-.marquee div { display: inline-flex; white-space: nowrap; animation: marquee 20s linear infinite; }
-.marquee span { font-family: var(--display); text-transform: uppercase; font-size: 13px; padding: 8px 0; letter-spacing: .02em; }
-.marquee span::after { content: '⚽'; padding: 0 18px; }
 
 .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
 .tabs button { flex: 1; background: var(--panel); color: var(--ink); box-shadow: var(--shadow-sm); }
@@ -457,28 +451,24 @@ button.ghost:hover, button.sec:hover, .gbtn:hover,
 .toast.err,
 .backlink:hover,
 .credit a:hover { color: var(--on-acid); }
-.marquee, .sticker-badge { color: var(--on-acid); }
+.sticker-badge { color: var(--on-acid); }
 
 /* ---------- home em 2 colunas ---------- */
 .auth-grid { display: grid; grid-template-columns: 1.15fr 0.85fr; gap: clamp(28px, 5vw, 64px); align-items: start; }
-.auth-grid > * { min-width: 0; } /* impede que o marquee (nowrap) infle a coluna */
+.auth-grid > * { min-width: 0; } /* impede que conteúdo largo infle as colunas */
 .auth-grid .hero {
   max-width: none; padding-top: 8px;
   display: flex; flex-direction: column; align-items: flex-start;
   gap: clamp(22px, 3vw, 40px); /* respiro entre os conjuntos */
 }
 .auth-grid .hero h1 { font-size: clamp(48px, 11vw, 118px); margin: 0; line-height: 0.86; font-weight: 800; overflow-wrap: break-word; }
-.auth-grid .hero p, .auth-grid .hero .credit, .auth-grid .hero .marquee { margin: 0; }
-/* marquee limitado à largura da coluna (hero usa align-items:flex-start, então força stretch) */
-.auth-grid .hero .marquee { align-self: stretch; width: 100%; min-width: 0; max-width: 100%; }
+.auth-grid .hero p, .auth-grid .hero .credit { margin: 0; }
 .auth-card { width: 100%; max-width: 480px; }
 @media (max-width: 880px) {
   .auth-grid { grid-template-columns: 1fr; gap: 14px; }
   .auth-card { max-width: 100%; }
 }
 
-/* faixinha (marquee) mais fina */
-.marquee span { font-size: 11px; padding: 4px 0; }
 
 @media (max-width: 760px) {
   .album-spread { grid-template-columns: 1fr; }
