@@ -34,7 +34,51 @@
     </div>
   </header>
 
-  <main id="app"></main>
+  <!-- Home estática: pinta antes do JS (FCP instantâneo). O app.js só liga os
+       comportamentos aqui. Ao deslogar, é reconstruída a partir do content.js —
+       mantenha este texto em sincronia com C.home se editar lá. -->
+  <main id="app">
+    <div id="inviteBanner"></div>
+    <div class="auth-grid">
+    <div class="hero">
+      <span class="sticker-badge">⚽ Álbum de figurinhas · Copa 2026</span>
+      <h1 class="glitch" data-text="Álbum Completo">Álbum<br/>Completo</h1>
+      <p>Cadastre suas repetidas e faltantes, convide amigos, monte seus grupos. O site faz o match e sugere as trocas. Crie sua conta para começar — é de graça.</p>
+      <div class="credit">powered by claude code · made by <a href="https://www.linkedin.com/in/fdrudi/" target="_blank" rel="noopener noreferrer">fernando drudi</a> · <a href="#" class="report-bugs">reporte bugs</a></div>
+      <div class="marquee" aria-hidden="true"><div>
+        <span>Bora completar o álbum</span><span>1013 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
+        <span>Bora completar o álbum</span><span>1013 figurinhas</span><span>48 seleções</span><span>trocas perfeitas</span>
+      </div></div>
+    </div>
+    <div class="card auth-card">
+      <div class="tabs">
+        <button id="tabReg" class="active">Criar conta</button>
+        <button id="tabLogin">Já tenho conta</button>
+      </div>
+      <form id="authForm">
+        <div class="field" id="nameField">
+          <label>Nome</label>
+          <input name="name" placeholder="Seu nome" autocomplete="name" />
+        </div>
+        <div class="field">
+          <label>E-mail</label>
+          <input name="email" type="email" placeholder="voce@email.com" autocomplete="email" />
+        </div>
+        <div class="field">
+          <label>Senha</label>
+          <input name="password" type="password" placeholder="Mínimo 8 caracteres" autocomplete="current-password" />
+        </div>
+        <label class="check" id="ageField">
+          <input name="age" type="checkbox" />
+          <span>Declaro que tenho <b>18 anos ou mais</b>.</span>
+        </label>
+        <div id="tsWidget" class="ts-widget"></div>
+        <button type="submit" style="width:100%">Entrar</button>
+      </form>
+      <div id="googleWrap"></div>
+    </div>
+    </div>
+  </main>
 
   <div id="toast" class="toast hidden"></div>
 
