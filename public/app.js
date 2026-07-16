@@ -102,13 +102,8 @@ function loadTurnstile() {
 
 // ====== Tela de login / cadastro ======
 function renderAuth() {
-  $('#nav').classList.add('hidden');
-  document.body.classList.remove('logged-in'); // cursor custom volta só na home
   const h = C.home;
   const marq = h.marquee.map((s) => `<span>${esc(s)}</span>`).join('');
-  const cfg = { turnstileSiteKey: '', googleEnabled: false };
-
-  // Pinta a home imediatamente — sem esperar rede (config/sessão vêm depois).
   app.innerHTML = `
     <div id="inviteBanner"></div>
     <div class="auth-grid">
@@ -147,6 +142,16 @@ function renderAuth() {
       <div id="googleWrap"></div>
     </div>
     </div>`;
+  wireAuth();
+}
+
+// Liga os comportamentos da tela de login. Funciona tanto no HTML estático do
+// index.html (para pintar na hora) quanto no re-render após logout.
+function wireAuth() {
+  const h = C.home;
+  $('#nav').classList.add('hidden');
+  document.body.classList.remove('logged-in');
+  const cfg = { turnstileSiteKey: '', googleEnabled: false };
 
   let mode = 'register';
   const setMode = (m) => {
@@ -1372,8 +1377,9 @@ async function init() {
   });
   $('#logoutBtn').onclick = logout;
 
-  // Pinta a home na hora (a maioria que chega está deslogada) — sem esperar rede.
-  renderAuth();
+  // A home já vem estática no index.html (pinta antes do JS). Só ligamos os
+  // comportamentos; se não estiver (ex.: navegação futura), renderiza.
+  if ($('#authForm')) wireAuth(); else renderAuth();
   // Em 2º plano: se a sessão existir (cookie httpOnly), troca pro app.
   api('/api/me').then((data) => { state.user = data.user; boot(); }).catch(() => {});
 }
